@@ -9,8 +9,14 @@ class RobotStatusUpdate(BaseModel):
     current_lng: Optional[float] = Field(None, description="Current longitude")
     battery_percent: int = Field(..., ge=0, le=100, description="Battery percentage (0-100)")
     points_treated_today: int = Field(0, description="Number of waypoints treated today")
+    target_waypoint_id: Optional[str] = Field(None, description="ObjectId string of the target waypoint, if dispatched")
+    mission_state: Literal["idle", "navigating", "inside_boundary", "treating", "completed"] = Field("idle", description="The robot's current mission phase")
+
+class RobotStatusDispatch(BaseModel):
+    target_waypoint_id: Optional[str] = Field(None, description="ObjectId string of the waypoint to dispatch the robot to. Null to cancel active target.")
 
 class RobotStatusOut(RobotStatusUpdate):
     robot_id: str = Field(..., description="The unique identifier for the robot")
     last_sync: datetime = Field(..., description="Server-computed UTC timestamp of the last heartbeat")
     overall_status: str = Field(..., description="Server-computed overall status (e.g., operational, low_battery, gps_lost, degraded)")
+

@@ -4,7 +4,8 @@ from typing import Optional
 
 from app.core.auth import verify_api_key
 from app.core.database import get_database
-from app.schemas.robot_status import RobotStatusUpdate, RobotStatusOut
+from app.schemas.robot_status import RobotStatusUpdate, RobotStatusOut, RobotStatusDispatch
+from app.utils.bson import validate_object_id
 
 router = APIRouter(prefix="/api/robot-status", tags=["Robot Status"])
 
@@ -91,3 +92,51 @@ async def get_robot_status(robot_id: str):
         )
         
     return RobotStatusOut(**doc)
+
+@router.patch("/{robot_id}", response_model=RobotStatusOut)
+async def dispatch_robot(robot_id: str, dispatch_update: RobotStatusDispatch):
+    """
+    Dispatches the robot to a specific waypoint by setting target_waypoint_id.
+    """
+    db = get_database()
+    
+    # Verify robot exists
+    robot_doc = await db.robot_status.find_one({"robot_id": robot_id})
+    if not robot_doc:
+        raise HTTPException(status_code=404, detail=f"Robot '{robot_id}' not found")
+
+    if dispatch_update.target_waypoint_id is not None:
+        # Validate waypoint exists
+        wp_oid = validate_object_id(dispatch_update.target_waypoint_id)
+        wp_doc = await db.waypoints.find_one({"_id": wp_oid})
+        if not wp_doc:
+            raise HTTPException(status_code=404, detail="Target waypoint not found")
+            
+        # Check mission state
+        current_state = robot_doc.get("mission_state", "idle")
+        if current_state not in ["idle", "completed"]:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Cannot dispatch. Robot is currently in state: {current_state}"
+            )
+        
+        updates = {
+            "target_waypoint_id": dispatch_update.target_waypoint_id,
+            # We do NOT set mission_state="navigating" here. 
+            # The robot reads target_waypoint_id and sets its own state on next heartbeat.
+        }
+    else:
+        # Cancel target
+        updates = {
+            "target_waypoint_id": None,
+            "mission_state": "idle"
+        }
+
+    await db.robot_status.update_one(
+        {"robot_id": robot_id},
+        {"$set": updates}
+    )
+    
+    # Return updated doc
+    updated_doc = await db.robot_status.find_one({"robot_id": robot_id})
+    return RobotStatusOut(**updated_doc)
