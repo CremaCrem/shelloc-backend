@@ -41,6 +41,7 @@ All request fields, plus:
 | `latitude` | `float` | yes | Decimal degrees |
 | `longitude` | `float` | yes | Decimal degrees |
 | `label` | `str` | no | Defaults to `f"Point {point_number}"` |
+| `radius_meters` | `float` | no | Boundary radius around the waypoint center. Defaults to `2.0`. The robot must be within this radius to begin treatment. |
 
 ### Update Schema (`WaypointUpdate`)
 All optional:
@@ -61,6 +62,7 @@ All create fields, plus:
 | `treated_at` | `datetime \| None` | Nullable until treated |
 | `before_reading_id` | `str \| None` | ObjectId string, nullable |
 | `after_reading_id` | `str \| None` | ObjectId string, nullable |
+| `radius_meters` | `float` | Boundary radius (defaults to `2.0`). Passed through from create. |
 
 > **Note:** `GET /api/waypoints/{id}` returns this schema with `before_reading` and `after_reading` objects **inlined**. List endpoints return IDs only.
 
@@ -75,6 +77,8 @@ All create fields, plus:
 | `current_lng` | `float` | no | |
 | `battery_percent` | `int` | yes | 0–100 |
 | `points_treated_today` | `int` | no | Default `0` |
+| `target_waypoint_id` | `str \| None` | no | ObjectId string of the waypoint the robot is currently dispatched to. `None` when idle. Set by the mobile app via `PATCH /api/robot-status/{id}`. |
+| `mission_state` | `Literal["idle", "navigating", "inside_boundary", "treating", "completed"]` | no | The robot's current mission phase. Updated by the robot on each heartbeat. Defaults to `"idle"`. |
 
 ### Response Schema (`RobotStatusOut`)
 All update fields, plus:
@@ -83,6 +87,8 @@ All update fields, plus:
 | `robot_id` | `str` | Path param used as document key |
 | `last_sync` | `datetime` | _(server-set)_ UTC upsert time |
 | `overall_status` | `str` | _(server-set)_ `"operational"` \| `"low_battery"` \| `"gps_lost"` \| `"degraded"` |
+| `target_waypoint_id` | `str \| None` | Passed through. The waypoint the robot is currently navigating to. |
+| `mission_state` | `str` | Passed through. The robot's current mission phase. |
 
 ## 4. Treatment Events
 

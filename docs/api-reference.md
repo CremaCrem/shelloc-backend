@@ -35,8 +35,9 @@ Invalid ObjectId strings in path/query params return `400`.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `POST` | `/{robot_id}` | `X-API-Key` | Upsert robot heartbeat. Computes `overall_status` server-side. |
-| `GET` | `/{robot_id}` | None | Get latest robot status. Returns `404` if no heartbeat ever received. |
+| `POST` | `/{robot_id}` | `X-API-Key` | Upsert robot heartbeat (from hardware). Computes `overall_status` server-side. Robot updates `mission_state` and current GPS here. |
+| `GET` | `/{robot_id}` | None | Get latest robot status. Returns `404` if no heartbeat ever received. Response includes `target_waypoint_id` and `mission_state`. |
+| `PATCH` | `/{robot_id}` | None | Set `target_waypoint_id` to dispatch the robot to a specific waypoint. The robot reads this field on its next heartbeat poll to receive its navigation target. Set to `null` to cancel and return to `"idle"`. |
 
 ## 4. Treatment Events
 

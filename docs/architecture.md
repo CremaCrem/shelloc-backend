@@ -35,10 +35,13 @@ flowchart TD
 
 ### Data Flow Summary
 
-1. **Before a mission:** App user creates up to 6 **waypoints** (GPS coordinates) for the robot to visit.
-2. **During a mission:** Robot navigates autonomously between waypoints, sends **sensor readings** (before and after treatment) and **robot status** heartbeats via GPRS. The mobile app updates its live telemetry dashboards by HTTP polling `GET /api/robot-status/{id}` and `GET /api/sensor-readings/latest` at a 5-second interval.
-3. **During treatment:** Robot disperses Moringa-Chitosan flocculant, then logs a **treatment event** (dosage, aggregation time, pollution level).
-4. **Anytime:** App user can open the **AI chat** to ask questions about water quality in plain language.
+1. **Setup:** App user creates up to 6 **waypoints** (GPS coordinates with a fixed 2-meter radius boundary zone) for the robot's mission area.
+2. **Dispatch:** App user selects a single active target waypoint and dispatches the robot to it via `PATCH /api/robot-status/{robot_id}` with `target_waypoint_id`. The robot operates **one waypoint at a time**.
+3. **Navigation:** Robot autonomously self-navigates toward the target waypoint coordinates. It sends **robot status** heartbeats via GPRS containing its current GPS position and `mission_state`. The mobile app polls `GET /api/robot-status/{id}` every 5 seconds to update the live map.
+4. **Arrival (2m Boundary):** When the robot's GPS position is within **2 meters** of the waypoint center, it enters `"inside_boundary"` mission state and begins the treatment cycle.
+5. **Treatment:** Inside the 2m zone, the robot takes a `before` sensor reading, disperses Moringa-Chitosan flocculant, waits for aggregation, then takes an `after` sensor reading. A **treatment event** is logged with dosage, aggregation time, and pollution level. The waypoint is marked `treated = True`.
+6. **Completion:** `mission_state` returns to `"idle"`. The user may then dispatch the robot to another waypoint.
+7. **Anytime:** App user can open the **AI chat** to ask questions about water quality in plain language.
 
 ## 2. Folder Structure
 
@@ -85,6 +88,7 @@ app/
 - A `waypoint` stores `before_reading_id` and `after_reading_id` — these are updated via `PATCH /api/waypoints/{id}` after readings are created.
 - `GET /api/waypoints/{id}` resolves and inlines the referenced reading objects so the app avoids a second round-trip.
 - **Deleting a waypoint does not cascade-delete readings or treatment events** — historical data is preserved, references are simply unlinked.
+- `robot_status` tracks the currently active `target_waypoint_id` and `mission_state` so both the hardware and mobile app share a single source of truth on which waypoint is being serviced and the robot's progress toward it.
 
 ## 6. AI Service Design
 
