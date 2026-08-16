@@ -55,5 +55,5 @@ Invalid ObjectId strings in path/query params return `400`.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `POST` | `/` | None | Send a message. Returns AI assistant reply with context snapshot. |
+| `POST` | `/` | None | Send a message. Returns live Gemini-generated Markdown reply grounded in context snapshot and multi-turn history. |
 | `GET` | `/history` | None | Query param: `user_id`, `limit`. List messages in chronological order. |

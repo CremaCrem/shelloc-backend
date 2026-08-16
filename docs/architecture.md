@@ -100,5 +100,21 @@ The AI service (`services/ai_service.py`) queries MongoDB and builds a compact c
 - Latest sensor reading per waypoint
 - Any critical waypoints
 
-### Provider Strategy
-The backend supports multiple AI providers (OpenAI, Claude, Gemini) configured via `AI_PROVIDER`. At this scale, a simple `if/elif` block inside `ai_service.py` is sufficient—do not introduce complex abstraction/plugin architectures unless the codebase requires it.
+### Provider Implementation
+The backend integrates with Google Gemini using the official `google-genai` SDK (targeting `gemini-3.7-flash`). While `AI_PROVIDER` configuration exists for multi-provider extensibility, OpenAI and Claude currently remain **unimplemented placeholders**.
+
+### Multi-Turn Conversational Memory
+To maintain chat context without unbounded token growth, `ai_service.py` queries `db.ai_chat_logs` for the most recent `MAX_CHAT_HISTORY` (configured to `5`) messages for the requesting `user_id`. These past exchanges are converted to `types.Content` objects (with `"user"` and `"model"` roles) and prepended to the Gemini generation request.
+
+### System Instruction & Domain Grounding
+The AI model is guided by a comprehensive `SYSTEM_INSTRUCTION` that grounds its responses in research-backed water quality standards:
+- **Turbidity (NTU):** `< 20 NTU` = good/remediated (monitoring only); `20–50 NTU` = borderline; `> 50 NTU` = critical/severe (requires active treatment). Untreated baseline is typically 110.33–146.51 NTU, and post-treatment target is 10.40–16.25 NTU.
+- **pH:** `< 6.0` = acidic/degraded (requires stabilization); `6.0–7.0` = target stabilized post-treatment window (mean ~6.46); `> 7.5–8.5` = borderline/elevated alkaline. Untreated baseline is typically 4.95–6.03.
+- **TDS (ppm):** `> 400 ppm` = high dissolved particulate load; `~200–250 ppm` = target remediated state. Untreated baseline is typically 394.16–485.13 ppm, and post-treatment target is 197.16–243.12 ppm.
+- **Flocculant Dosage (Moringa-Chitosan):** Adaptive dosage based on turbidity. If `< 20 NTU`: no additional flocculant, monitoring only. If `20–50 NTU`: moderate dosage via pump. If `> 50 NTU` (or baseline `> 100 NTU`): full/maximum standard dosage for rapid macro-floc aggregation.
+- **Geofence Boundary:** 2-meter radius from the target waypoint.
+
+Concrete recommendations (such as dosage adjustments or status verdicts) are explicitly structured with bold callouts (e.g., `**Recommendation:** ...`) for readability.
+
+### Error Handling & Resilience
+External AI calls are wrapped in exception handlers. If the Gemini API call fails due to invalid credentials, rate limiting, or network unavailability, `ai_service.py` catches the error and returns a formatted Markdown error message (`**Error:** ...`) instead of raising an unhandled exception. This ensures the `/api/ai-chat/` endpoint never returns a `500 Internal Server Error` due to upstream AI provider failures.

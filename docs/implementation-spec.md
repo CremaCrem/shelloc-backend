@@ -67,7 +67,7 @@ Keep routers thin. They should: parse input, call the database/services, and for
 - Flow for `POST /api/ai-chat`:
   1. Save user message to `ai_chat_logs`.
   2. Call `ai_service.build_context(robot_id)` to get compact data.
-  3. Call `ai_service.get_ai_reply(message, context)` to call provider.
+  3. Call `ai_service.get_ai_reply(message, context, user_id)` to fetch recent chat history and call the Gemini provider.
   4. Save assistant reply with `context_snapshot`.
   5. Return assistant message.
 
