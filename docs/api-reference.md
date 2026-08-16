@@ -57,3 +57,11 @@ Invalid ObjectId strings in path/query params return `400`.
 |---|---|---|---|
 | `POST` | `/` | None | Send a message. Returns live Gemini-generated Markdown reply grounded in context snapshot and multi-turn history. |
 | `GET` | `/history` | None | Query param: `user_id`, `limit`. List messages in chronological order. |
+
+## 6. Real-Time Telemetry (WebSockets)
+
+**Path prefix:** `/ws/robot`
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `WebSocket` | `/{robot_id}` | None | Establish a persistent WebSocket connection to stream real-time telemetry. The server will broadcast a JSON payload (`RobotStatusOut` schema) to this socket whenever the robot sends a heartbeat (`POST /api/robot-status/{id}`) or is dispatched. |

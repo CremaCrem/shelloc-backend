@@ -37,7 +37,7 @@ flowchart TD
 
 1. **Setup:** App user creates up to 6 **waypoints** (GPS coordinates with a fixed 2-meter radius boundary zone) for the robot's mission area.
 2. **Dispatch:** App user selects a single active target waypoint and dispatches the robot to it via `PATCH /api/robot-status/{robot_id}` with `target_waypoint_id`. The robot operates **one waypoint at a time**.
-3. **Navigation:** Robot autonomously self-navigates toward the target waypoint coordinates. It sends **robot status** heartbeats via GPRS containing its current GPS position and `mission_state`. The mobile app polls `GET /api/robot-status/{id}` every 5 seconds to update the live map.
+3. **Navigation (Real-Time Telemetry):** Robot autonomously self-navigates toward the target waypoint coordinates. It sends **robot status** heartbeats via GPRS containing its current GPS position and `mission_state`. The mobile app establishes a **WebSocket connection** (`/ws/robot/{robot_id}`) to instantly receive these live telemetry broadcasts without needing to poll.
 4. **Arrival (2m Boundary):** When the robot's GPS position is within **2 meters** of the waypoint center, it enters `"inside_boundary"` mission state and begins the treatment cycle.
 5. **Treatment:** Inside the 2m zone, the robot takes a `before` sensor reading, disperses Moringa-Chitosan flocculant, waits for aggregation, then takes an `after` sensor reading. A **treatment event** is logged with dosage, aggregation time, and pollution level. The waypoint is marked `treated = True`.
 6. **Completion:** `mission_state` returns to `"idle"`. The user may then dispatch the robot to another waypoint.

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from app.core.database import get_database
-from app.routers import robot_status, waypoints, sensor_readings, treatment_events, ai_chat
+from app.routers import robot_status, waypoints, sensor_readings, treatment_events, ai_chat, websockets
 
 app = FastAPI(title="SHELLOC Backend API (Reloaded)")
 
@@ -33,3 +33,4 @@ app.include_router(waypoints.router)
 app.include_router(sensor_readings.router)
 app.include_router(treatment_events.router)
 app.include_router(ai_chat.router)
+app.include_router(websockets.router)

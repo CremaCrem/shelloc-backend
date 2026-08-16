@@ -6,6 +6,7 @@ from app.core.auth import verify_api_key
 from app.core.database import get_database
 from app.schemas.robot_status import RobotStatusUpdate, RobotStatusOut, RobotStatusDispatch
 from app.utils.bson import validate_object_id
+from app.services.connection_manager import manager
 
 router = APIRouter(prefix="/api/robot-status", tags=["Robot Status"])
 
@@ -68,7 +69,12 @@ async def update_robot_status(
         )
     
     # Prepare the response
-    return RobotStatusOut(**update_doc)
+    response_out = RobotStatusOut(**update_doc)
+    
+    # Broadcast to any connected websocket clients
+    await manager.broadcast_to_robot(robot_id, response_out.model_dump(mode="json"))
+    
+    return response_out
 
 @router.get("/{robot_id}", response_model=RobotStatusOut)
 async def get_robot_status(robot_id: str):
@@ -139,4 +145,9 @@ async def dispatch_robot(robot_id: str, dispatch_update: RobotStatusDispatch):
     
     # Return updated doc
     updated_doc = await db.robot_status.find_one({"robot_id": robot_id})
-    return RobotStatusOut(**updated_doc)
+    response_out = RobotStatusOut(**updated_doc)
+    
+    # Broadcast to any connected websocket clients
+    await manager.broadcast_to_robot(robot_id, response_out.model_dump(mode="json"))
+    
+    return response_out

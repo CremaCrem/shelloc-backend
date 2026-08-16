@@ -56,7 +56,8 @@ Keep routers thin. They should: parse input, call the database/services, and for
 ### Robot Status
 - **Upsert**: The POST endpoint (hardware write) should UPSERT the document using the path param `robot_id` as the key.
 - Update `last_sync` to current server time on every upsert.
-- **PATCH (Dispatch):** The PATCH endpoint (app write) merges only `target_waypoint_id` into the document. Validate the provided `target_waypoint_id` is a valid ObjectId and that the waypoint exists; return `404` if not. Return `400` if the robot's current `mission_state` is not `"idle"` or `"completed"` (i.e., reject a new dispatch if the robot is already navigating or treating). Setting `target_waypoint_id` to `null` cancels the active target and resets `mission_state` to `"idle"`.
+- **WebSocket Broadcast**: On successful upsert, broadcast the serialized `RobotStatusOut` JSON payload to any clients connected to `/ws/robot/{robot_id}`.
+- **PATCH (Dispatch):** The PATCH endpoint (app write) merges only `target_waypoint_id` into the document. Validate the provided `target_waypoint_id` is a valid ObjectId and that the waypoint exists; return `404` if not. Return `400` if the robot's current `mission_state` is not `"idle"` or `"completed"` (i.e., reject a new dispatch if the robot is already navigating or treating). Setting `target_waypoint_id` to `null` cancels the active target and resets `mission_state` to `"idle"`. On successful PATCH, broadcast the updated status via WebSocket.
 - The robot reads `target_waypoint_id` from its `GET /api/robot-status/{id}` poll response to know where to navigate next.
 
 ### Treatment Events
