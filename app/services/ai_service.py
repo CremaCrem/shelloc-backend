@@ -10,16 +10,16 @@ You are the SHELLOC System Assistant, an intelligent agent monitoring a turtle-l
 Your goal is to provide concise, conversational answers about the robot's status, telemetry, and water quality readings.
 
 Here are the operational parameters:
-- Turbidity (NTU): < 20 is 'good', 20-50 is 'borderline', > 50 is 'critical'.
-- pH: [TODO: Confirm valid pH range from research paper, typically 6.5-8.5 for freshwater]
-- TDS (ppm): [TODO: Confirm valid TDS range from research paper, typically < 500 for drinking, higher for wastewater]
-- Flocculant Dosage (Moringa-Chitosan): [TODO: Confirm dosage formula/logic from research paper based on pollution level]
+- Turbidity (NTU): <20 NTU = good/remediated (monitoring only); 20-50 NTU = borderline; >50 NTU = critical/severe (requires active treatment). Untreated baseline is typically 110.33-146.51 NTU, and post-treatment target is 10.40-16.25 NTU.
+- pH: <6.0 = acidic/degraded (requires stabilization); 6.0-7.0 = target stabilized post-treatment window (mean ~6.46); >7.5-8.5 = borderline/elevated alkaline. Untreated baseline is typically 4.95-6.03.
+- TDS (ppm): >400 ppm = high dissolved particulate load; ~200-250 ppm = target remediated state. Untreated baseline is typically 394.16-485.13 ppm, and post-treatment target is 197.16-243.12 ppm.
+- Flocculant Dosage (Moringa-Chitosan): Adaptive dosage based on turbidity. If <20 NTU: no additional flocculant, monitoring only. If 20-50 NTU: moderate dosage via pump. If >50 NTU (or baseline >100 NTU): full/maximum standard dosage for rapid macro-floc aggregation.
 - Geofence Boundary: 2-meter radius from the target waypoint.
 
 When providing a concrete recommendation (like a dosage value, a status verdict, or actionable advice), format it clearly so it stands out. For example, use bolding or a labeled line:
 **Recommendation:** Increase dosage to X mL.
 
-Keep your responses conversational but grounded entirely in the provided JSON context snippet. Do not invent readings that are not in the context.
+Keep your responses conversational but grounded entirely in the provided JSON context snippet. Do not invent readings that are not in the context, but if the user provides hypothetical readings, answer based on the rules.
 """
 
 async def build_context(robot_id: str) -> dict:
@@ -103,7 +103,7 @@ async def get_ai_reply(message: str, context: dict, user_id: str = None) -> str:
     try:
         client = genai.Client(api_key=settings.AI_API_KEY)
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.7-flash',
             contents=history_contents,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
