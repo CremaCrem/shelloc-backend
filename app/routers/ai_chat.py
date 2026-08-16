@@ -26,7 +26,7 @@ async def send_chat_message(message: ChatMessageCreate):
     
     # Get context and AI reply
     context = await build_context(message.robot_id)
-    reply_text = await get_ai_reply(message.message, context)
+    reply_text = await get_ai_reply(message.message, context, message.user_id)
     
     # Save assistant message
     assistant_msg_doc = {

@@ -1,5 +1,26 @@
 from app.core.database import get_database
 from app.core.config import settings
+from google import genai
+from google.genai import types
+
+MAX_CHAT_HISTORY = 5
+
+SYSTEM_INSTRUCTION = """
+You are the SHELLOC System Assistant, an intelligent agent monitoring a turtle-like autonomous water treatment robot. 
+Your goal is to provide concise, conversational answers about the robot's status, telemetry, and water quality readings.
+
+Here are the operational parameters:
+- Turbidity (NTU): < 20 is 'good', 20-50 is 'borderline', > 50 is 'critical'.
+- pH: [TODO: Confirm valid pH range from research paper, typically 6.5-8.5 for freshwater]
+- TDS (ppm): [TODO: Confirm valid TDS range from research paper, typically < 500 for drinking, higher for wastewater]
+- Flocculant Dosage (Moringa-Chitosan): [TODO: Confirm dosage formula/logic from research paper based on pollution level]
+- Geofence Boundary: 2-meter radius from the target waypoint.
+
+When providing a concrete recommendation (like a dosage value, a status verdict, or actionable advice), format it clearly so it stands out. For example, use bolding or a labeled line:
+**Recommendation:** Increase dosage to X mL.
+
+Keep your responses conversational but grounded entirely in the provided JSON context snippet. Do not invent readings that are not in the context.
+"""
 
 async def build_context(robot_id: str) -> dict:
     """
@@ -21,7 +42,7 @@ async def build_context(robot_id: str) -> dict:
         wp["id"] = str(wp.pop("_id"))
     context["waypoints"] = waypoints
     
-    # 3. Get latest sensor reading per waypoint (using same pipeline as /latest)
+    # 3. Get latest sensor reading per waypoint
     pipeline = [
         {"$match": {"robot_id": robot_id}},
         {"$sort": {"timestamp": -1}},
@@ -42,9 +63,10 @@ async def build_context(robot_id: str) -> dict:
     
     return context
 
-async def get_ai_reply(message: str, context: dict) -> str:
+async def get_ai_reply(message: str, context: dict, user_id: str = None) -> str:
     """
     Calls the configured AI provider. Uses a fallback if no API key is provided.
+    Fetches up to MAX_CHAT_HISTORY recent messages to inject as conversational memory.
     """
     if not settings.AI_API_KEY:
         return (
@@ -53,10 +75,41 @@ async def get_ai_reply(message: str, context: dict) -> str:
             f"You asked: '{message}'"
         )
         
-    # Example logic for real provider
-    provider = settings.AI_PROVIDER
-    # if provider == "openai": ...
-    # elif provider == "claude": ...
-    # elif provider == "gemini": ...
+    if settings.AI_PROVIDER != "gemini":
+        return f"Provider {settings.AI_PROVIDER} is not fully implemented yet."
+        
+    db = get_database()
+    history_contents = []
     
-    return f"This is a mocked response from {provider} for the query: '{message}'."
+    if user_id:
+        # Fetch the most recent MAX_CHAT_HISTORY messages for this user, sorted oldest first in this batch
+        cursor = db.ai_chat_logs.find({"user_id": user_id}).sort("timestamp", -1).limit(MAX_CHAT_HISTORY)
+        recent_msgs = await cursor.to_list(length=MAX_CHAT_HISTORY)
+        recent_msgs.reverse() # Oldest first for the context window
+        
+        for msg in recent_msgs:
+            role = "user" if msg["role"] == "user" else "model"
+            history_contents.append(
+                types.Content(role=role, parts=[types.Part.from_text(text=msg["message"])])
+            )
+            
+    # Add the current message with the injected context
+    context_str = str(context)
+    full_prompt = f"System Context Snapshot:\n{context_str}\n\nUser Question:\n{message}"
+    history_contents.append(
+        types.Content(role="user", parts=[types.Part.from_text(text=full_prompt)])
+    )
+    
+    try:
+        client = genai.Client(api_key=settings.AI_API_KEY)
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=history_contents,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                temperature=0.4
+            )
+        )
+        return response.text
+    except Exception as e:
+        return f"**Error:** I'm having trouble connecting to the AI provider right now. ({str(e)})"
