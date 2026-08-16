@@ -11,6 +11,10 @@ class Settings:
         self.API_KEY = os.getenv("API_KEY")
         self.AI_PROVIDER = os.getenv("AI_PROVIDER")
         self.AI_API_KEY = os.getenv("AI_API_KEY")
+        
+        # CORS allowed origins (comma-separated or wildcard default)
+        cors_raw = os.getenv("CORS_ORIGINS", "*")
+        self.CORS_ORIGINS = [origin.strip() for origin in cors_raw.split(",") if origin.strip()]
 
         self.validate()
 

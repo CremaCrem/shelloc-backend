@@ -1,9 +1,20 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from app.core.config import settings
 from app.core.database import get_database
 from app.routers import robot_status, waypoints, sensor_readings, treatment_events, ai_chat, websockets
 
 app = FastAPI(title="SHELLOC Backend API (Reloaded)")
+
+# Configure CORS for mobile Expo and web clients
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/health", tags=["Health"])
 async def health_check():

@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: shelloc-backend
+    env: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: DB_NAME
+        value: shelloc_db
+      - key: API_KEY
+        generateValue: true
+      - key: AI_PROVIDER
+        value: gemini
+      - key: AI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: "*"

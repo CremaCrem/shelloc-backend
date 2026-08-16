@@ -115,3 +115,23 @@ You can configure the simulation via environment variables:
   3. Implement the route in `app/routers/`.
   4. Ensure any required server-computed fields are handled.
   5. Update `docs/api-reference.md`.
+
+---
+
+## 7. Production Deployment & Cloud Hosting
+
+### Environment Variables Checklist
+Before deploying to production (e.g. Render, Railway, Fly.io, or AWS), configure these variables:
+- `MONGO_URI`: Production MongoDB Atlas connection URI with authentication and replica set.
+- `DB_NAME`: Production database name (e.g. `shelloc_prod`).
+- `API_KEY`: High-entropy secret key for robot hardware write authentication.
+- `AI_PROVIDER`: `gemini`
+- `AI_API_KEY`: Production Google AI Studio API key.
+- `CORS_ORIGINS`: Comma-separated list of allowed origins (e.g. `https://app.shelloc.io,exp://...`) or `*` for broad mobile client support.
+
+### WebSocket Production Considerations
+- **SSL / TLS**: In production, WebSockets must connect via `wss://` (e.g. `wss://api.shelloc.io/ws/robot/{robot_id}`).
+- **Proxy Configuration**: If using an Nginx or Cloudflare reverse proxy, ensure HTTP/1.1 upgrade headers are enabled (`Upgrade $http_upgrade; Connection "upgrade";`).
+
+### Deploying with Render Blueprint
+A `render.yaml` blueprint is included in the repository root. Connecting the repository to Render will automatically detect the Dockerfile, wire the `/health` check path, and prompt for secret variables.
