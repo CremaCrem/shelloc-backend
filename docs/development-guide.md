@@ -80,7 +80,30 @@ Run tests locally via `pytest` or inside Docker with `docker compose exec backen
 
 ---
 
-## 5. Code Conventions
+## 5. Running the Robot Simulator
+
+To test the mobile app or backend logic against realistic data, you can use the built-in Hardware & Mission Simulator. This script mimics the physical `MATRIX Mini R4` by autonomously handling heartbeats, live GPS movement, and the iterative water-treatment cycle based on empirical thresholds.
+
+```bash
+# In a new terminal window (with the backend already running)
+# Make sure your virtual environment is active, or use docker compose to run it
+python3 scripts/simulate_robot.py
+```
+
+### What the Simulator does:
+1. Pushes continuous GPS heartbeats to `/api/robot-status/{id}` and polls for dispatch commands.
+2. Once you dispatch it to a waypoint (via `PATCH /api/robot-status/{id}` or the mobile app), it simulates smooth GPS navigation toward the target.
+3. Upon entering the 2m boundary, it simulates the flocculation treatment cycle iteratively: taking a 'before' reading, waiting for aggregation, taking an 'after' reading with partial clarity improvements, logging treatment events, and re-treating until the water parameters fall within the target windows (Turbidity <20 NTU, pH 6.05-6.86, TDS 197-243 ppm).
+4. After achieving targets (or hitting the max retries limit), it marks the waypoint as treated and returns to idle mode.
+
+You can configure the simulation via environment variables:
+- `SIM_SPEED_MS`: Simulated travel speed in meters/second (default: 5.0)
+- `API_KEY`: Must match your backend `.env`
+- `API_URL`: Backend URL (default: `http://localhost:8000/api`)
+
+---
+
+## 6. Code Conventions
 
 - **Module Naming**: Use lowercase `snake_case` for all Python files. Pluralize router names (e.g., `sensor_readings.py`).
 - **Imports**: Avoid circular dependencies. Use absolute imports (e.g., `from app.core.database import get_database`).
