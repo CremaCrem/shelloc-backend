@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from app.core.database import get_database
 from app.routers import robot_status, waypoints, sensor_readings, treatment_events, ai_chat
 
-app = FastAPI(title="SHELLOC Backend API")
+app = FastAPI(title="SHELLOC Backend API (Reloaded)")
 
 @app.get("/health", tags=["Health"])
 async def health_check():
