@@ -18,6 +18,7 @@ jobs:
       AI_PROVIDER: gemini
       AI_API_KEY: test_dummy_gemini_key
       CORS_ORIGINS: "*"
+      PYTHONPATH: "."
 
     steps:
       - name: Checkout repository
