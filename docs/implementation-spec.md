@@ -114,3 +114,14 @@ SHELLOC operates on a 9-state closed-loop operational lifecycle:
   - Linked waypoint before/after comparative sensor deltas.
 - **Conversational Memory:** Preserves the last 5 turns per `user_id` from `ai_chat_logs`.
 - Formats recommendations with bold callouts (`**Recommendation:** ...`).
+
+---
+
+## 6. API Dispatch Guardrails
+
+### `PATCH /api/robot-status/{id}` (Dispatch Endpoint)
+To prevent mission collision and double-dispatch bugs, the dispatch endpoint enforces strict state machine validation:
+- **Condition:** Before setting a `target_waypoint_id`, the backend evaluates the current `mission_state`.
+- **Allowed States:** A dispatch is ONLY accepted if `mission_state` is `"idle"` or `"completed"`.
+- **Rejection:** If the robot is in any other active phase (e.g. `navigating`, `dispensing_flocculant`), the backend rejects the request with a `400 Bad Request` and the message: *"Cannot dispatch. Robot is currently in state: {current_state}"*.
+- **Client Responsibility:** Client applications (e.g., the mobile frontend) must proactively disable dispatch UI elements when missions are active, and must implement error handling to surface this `400` rejection to the user.

@@ -46,6 +46,12 @@ async def list_waypoints(robot_id: str = None, limit: int = 50):
     waypoints = await cursor.to_list(length=200)
     
     return [WaypointOut(**serialize_doc(wp)) for wp in waypoints]
+@router.get("/robot/{robot_id}", response_model=List[WaypointOut])
+async def list_waypoints_by_robot(robot_id: str, limit: int = 50):
+    db = get_database()
+    cursor = db.waypoints.find({"robot_id": robot_id}).limit(min(limit, 200))
+    waypoints = await cursor.to_list(length=200)
+    return [WaypointOut(**serialize_doc(wp)) for wp in waypoints]
 
 @router.get("/{id}", response_model=WaypointDetailOut)
 async def get_waypoint(id: str):
