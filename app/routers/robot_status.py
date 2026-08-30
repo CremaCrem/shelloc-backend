@@ -45,8 +45,8 @@ async def update_robot_status(
         gps_signal=status_update.gps_signal
     )
     
-    # Prepare the document for MongoDB
-    update_doc = status_update.model_dump()
+    # Prepare the document for MongoDB using exclude_unset to avoid overwriting fields like target_waypoint_id
+    update_doc = status_update.model_dump(exclude_unset=True)
     update_doc["last_sync"] = last_sync
     update_doc["overall_status"] = overall_status
     
@@ -61,6 +61,8 @@ async def update_robot_status(
             {"$set": update_doc},
             upsert=True
         )
+        # Fetch the updated document to include fields that were not overwritten
+        updated_doc = await db.robot_status.find_one({"robot_id": robot_id})
     except Exception as e:
         # Avoid exposing raw database errors
         raise HTTPException(
@@ -69,7 +71,7 @@ async def update_robot_status(
         )
     
     # Prepare the response
-    response_out = RobotStatusOut(**update_doc)
+    response_out = RobotStatusOut(**updated_doc)
     
     # Broadcast to any connected websocket clients
     await manager.broadcast_to_robot(robot_id, response_out.model_dump(mode="json"))
