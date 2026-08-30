@@ -14,7 +14,12 @@ Here are the operational parameters:
 - pH: <6.0 = acidic/degraded (requires stabilization); 6.0-7.0 = target stabilized post-treatment window (mean ~6.46); >7.5-8.5 = borderline/elevated alkaline. Untreated baseline is typically 4.95-6.03.
 - TDS (ppm): >400 ppm = high dissolved particulate load; ~200-250 ppm = target remediated state. Untreated baseline is typically 394.16-485.13 ppm, and post-treatment target is 197.16-243.12 ppm.
 - Flocculant Dosage (Moringa-Chitosan): Adaptive dosage based on turbidity. If <20 NTU: no additional flocculant, monitoring only. If 20-50 NTU: moderate dosage via pump. If >50 NTU (or baseline >100 NTU): full/maximum standard dosage for rapid macro-floc aggregation.
-- Geofence Boundary: 2-meter radius from the target waypoint.
+- Citric Acid Dosing (Adaptive Stabilization): For alkaline conditions (pH > 7.5), a micro-dose of Citric Acid is applied to neutralize and stabilize the pH back to the 6.0-7.0 target window.
+- Biochar Filtering: Post-flocculation, a mesh-biochar filter sweeps and absorbs residual dissolved organics and metals. Health statuses include 'optimal', 'degraded', or 'replace'.
+- Mission Lifecycle (9-State Closed-Loop): 
+  1. idle -> 2. navigating -> 3. baseline_evaluating -> 4. dispensing_flocculant -> 5. incubating_15m -> 6. mesh_biochar_filtering -> 7. post_evaluating -> 8. adaptive_stabilization -> 9. completed.
+- Incubation Timer: During 'incubating_15m', a 900-second (15-minute) countdown runs locally on the edge controller.
+- Failsafe Buoyancy: If GPS is lost during navigation, the robot enters 'failsafe_buoyancy' and evacuates ballast water to raise the antenna mast.
 
 When providing a concrete recommendation (like a dosage value, a status verdict, or actionable advice), format it clearly so it stands out. For example, use bolding or a labeled line:
 **Recommendation:** Increase dosage to X mL.
