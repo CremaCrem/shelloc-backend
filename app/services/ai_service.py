@@ -113,16 +113,26 @@ async def get_ai_reply(message: str, context: dict, user_id: str = None) -> str:
         types.Content(role="user", parts=[types.Part.from_text(text=full_prompt)])
     )
     
-    try:
-        client = genai.Client(api_key=settings.AI_API_KEY)
-        response = client.models.generate_content(
-            model='gemini-3.7-flash',
-            contents=history_contents,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                temperature=0.4
+    models_to_try = [settings.AI_MODEL, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    # De-duplicate while preserving order
+    models_to_try = list(dict.fromkeys(models_to_try))
+    
+    client = genai.Client(api_key=settings.AI_API_KEY)
+    last_error = None
+
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=history_contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    temperature=0.4
+                )
             )
-        )
-        return response.text
-    except Exception as e:
-        return f"**Error:** I'm having trouble connecting to the AI provider right now. ({str(e)})"
+            return response.text
+        except Exception as e:
+            last_error = e
+            continue
+
+    return f"**Error:** I'm having trouble connecting to the AI provider right now. ({str(last_error)})"
