@@ -113,7 +113,7 @@ async def get_ai_reply(message: str, context: dict, user_id: str = None) -> str:
         types.Content(role="user", parts=[types.Part.from_text(text=full_prompt)])
     )
     
-    models_to_try = [settings.AI_MODEL, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    models_to_try = [settings.AI_MODEL, "gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest"]
     # De-duplicate while preserving order
     models_to_try = list(dict.fromkeys(models_to_try))
     

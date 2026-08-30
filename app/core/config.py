@@ -11,7 +11,7 @@ class Settings:
         self.API_KEY = os.getenv("API_KEY")
         self.AI_PROVIDER = os.getenv("AI_PROVIDER")
         self.AI_API_KEY = os.getenv("AI_API_KEY")
-        self.AI_MODEL = os.getenv("AI_MODEL", "gemini-2.5-flash")
+        self.AI_MODEL = os.getenv("AI_MODEL", "gemini-3.6-flash")
         
         # CORS allowed origins (comma-separated or wildcard default)
         cors_raw = os.getenv("CORS_ORIGINS", "*")
