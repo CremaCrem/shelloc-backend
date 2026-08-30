@@ -5,7 +5,8 @@ from datetime import datetime
 class TreatmentEventCreate(BaseModel):
     robot_id: str = Field(..., description="The ID of the robot")
     waypoint_id: str = Field(..., description="ObjectId string of the waypoint")
-    dosage_ml: float = Field(..., description="Volume of flocculant dispensed (mL)")
+    moringa_chitosan_ml: float = Field(..., description="Volume of Moringa-Chitosan flocculant dispensed (mL)")
+    citric_acid_ml: float = Field(..., description="Volume of Citric Acid pH stabilizer dispensed (mL)")
     pollution_level: Literal["low", "medium", "high"] = Field(..., description="Robot-assessed pollution level")
     floc_aggregation_time_sec: Optional[int] = Field(None, description="Time for floc to form (seconds)")
     eta_next_area_sec: Optional[int] = Field(None, description="Estimated travel time to next waypoint")

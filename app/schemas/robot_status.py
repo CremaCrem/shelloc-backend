@@ -10,7 +10,18 @@ class RobotStatusUpdate(BaseModel):
     battery_percent: int = Field(..., ge=0, le=100, description="Battery percentage (0-100)")
     points_treated_today: int = Field(0, description="Number of waypoints treated today")
     target_waypoint_id: Optional[str] = Field(None, description="ObjectId string of the target waypoint, if dispatched")
-    mission_state: Literal["idle", "navigating", "inside_boundary", "treating", "completed"] = Field("idle", description="The robot's current mission phase")
+    mission_state: Literal[
+        "idle", 
+        "navigating", 
+        "baseline_evaluating", 
+        "dispensing_flocculant", 
+        "incubating_15m", 
+        "mesh_biochar_filtering", 
+        "post_evaluating", 
+        "adaptive_stabilization", 
+        "completed", 
+        "failsafe_buoyancy"
+    ] = Field("idle", description="The robot's current mission phase")
 
 class RobotStatusDispatch(BaseModel):
     target_waypoint_id: Optional[str] = Field(None, description="ObjectId string of the waypoint to dispatch the robot to. Null to cancel active target.")

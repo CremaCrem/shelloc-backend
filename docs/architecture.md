@@ -1,120 +1,178 @@
 # Architecture Overview
 
-This document explains HOW the SHELLOC backend system is organized.
+This document explains HOW the SHELLOC backend system is organized, detailing its closed-loop bioremediation state machine, telemetry pipeline, data relationships, and AI integration.
 
 ## 1. System Context
 
-**SHELLOC** (Smart Hydro-Environmental Locator and Cleaner) is an autonomous water-remediation robot that deploys Moringa-Chitosan flocculant to treat suspended particulate matter (SPM) in open water bodies.
+**SHELLOC** (Smart Hydro-Environmental Locator and Cleaner) is an autonomous water-remediation robot that executes closed-loop bioremediation by deploying natural **Moringa-Chitosan flocculant** and **Citric Acid** to treat suspended particulate matter (SPM), restore water clarity, and stabilize aquatic pH in open water bodies.
 
-### System Components
+### System Architecture Diagram
 
 ```mermaid
 flowchart TD
-    subgraph Robot Hardware
-        Matrix[MATRIX Mini R4 / Raspberry Pi]
-        Sensors[Turbidity, pH, TDS, NIR camera]
-        GPS[SIM808 GPS/GPRS]
-        Pump[Moringa-Chitosan pump]
+    subgraph Robot Hardware [Robot Edge Hardware - Raspberry Pi / Matrix Mini R4]
+        Sensors[Sensors: Turbidity, pH, TDS, Temp, SONAR, NoIR Camera]
+        Actuators[Actuators: 120mL/min Floc Pump, Citric Acid Pump, Ballast Pump, Stirring Magnet]
+        EdgeFSM[Onboard Edge FSM: 15-min Incubation Timer & Buoyancy Failsafe Controller]
+        Comms[SIM808 / 4G Cellular Module]
     end
 
-    subgraph React Native Expo App
-        Dash[Live sensor dashboards]
-        Map[Waypoint map]
-        Chat[AI chat]
+    subgraph Backend Infrastructure [FastAPI Backend Service]
+        Auth[Auth & API Gateway]
+        FSMService[Mission & Telemetry Service]
+        WSManager[WebSocket Broadcast Manager]
+        AIService[AI Engine: Google Gemini 3.7 Flash]
     end
 
-    Backend[FastAPI Backend]
-    DB[(MongoDB)]
-    AI[AI Provider: OpenAI/Claude/Gemini]
+    subgraph Data Tier [Persistence Layer]
+        MongoDB[(MongoDB Database)]
+    end
 
-    Robot Hardware -- GPRS POST --> Backend
-    React Native Expo App -- REST GET/PATCH --> Backend
-    Backend <--> DB
-    Backend <--> AI
+    subgraph Client Applications [Companion User Interfaces - 4-View Layout]
+        WebPortal[Web Portal: Sidebar Nav]
+        MobileApp[Mobile App: Bottom Tabs]
+    end
+
+    Sensors --> EdgeFSM
+    Actuators <-- EdgeFSM
+    EdgeFSM <--> Comms
+    Comms -- GPRS / HTTP POST & WS Heartbeats --> Auth
+    Auth --> FSMService
+    FSMService <--> MongoDB
+    FSMService --> WSManager
+    WSManager -- Real-Time Broadcast (/ws/robot/{id}) --> WebPortal
+    WSManager -- Real-Time Broadcast (/ws/robot/{id}) --> MobileApp
+    WebPortal -- REST API (Dispatch / CRUD) --> Auth
+    MobileApp -- REST API (Dispatch / CRUD) --> Auth
+    FSMService <--> AIService
+    AIService -- Grounded Telemetry Insights --> WebPortal
+    AIService -- Grounded Telemetry Insights --> MobileApp
 ```
 
-### Data Flow Summary
+---
 
-1. **Setup:** App user creates up to 6 **waypoints** (GPS coordinates with a fixed 2-meter radius boundary zone) for the robot's mission area.
-2. **Dispatch:** App user selects a single active target waypoint and dispatches the robot to it via `PATCH /api/robot-status/{robot_id}` with `target_waypoint_id`. The robot operates **one waypoint at a time**.
-3. **Navigation (Real-Time Telemetry):** Robot autonomously self-navigates toward the target waypoint coordinates. It sends **robot status** heartbeats via GPRS containing its current GPS position and `mission_state`. The mobile app establishes a **WebSocket connection** (`/ws/robot/{robot_id}`) to instantly receive these live telemetry broadcasts without needing to poll.
-4. **Arrival (2m Boundary):** When the robot's GPS position is within **2 meters** of the waypoint center, it enters `"inside_boundary"` mission state and begins the treatment cycle.
-5. **Treatment:** Inside the 2m zone, the robot takes a `before` sensor reading, disperses Moringa-Chitosan flocculant, waits for aggregation, then takes an `after` sensor reading. A **treatment event** is logged with dosage, aggregation time, and pollution level. The waypoint is marked `treated = True`.
-6. **Completion:** `mission_state` returns to `"idle"`. The user may then dispatch the robot to another waypoint.
-7. **Anytime:** App user can open the **AI chat** to ask questions about water quality in plain language.
+## 2. Closed-Loop Operational Lifecycle (9-State FSM)
 
-## 2. Folder Structure
+SHELLOC operates on an adaptive, closed-loop state machine orchestrated on the edge and synchronized with the backend.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle : Initialized & Powered ON
+    idle --> navigating : Dispatched to Waypoint (App PATCH)
+    navigating --> baseline_evaluating : Within 2m Geofence Boundary
+    baseline_evaluating --> dispensing_flocculant : Pollution Level Computed (Low/Med/High)
+    dispensing_flocculant --> incubating_15m : Flocculant Dosed (120 mL/min Pump)
+    
+    state incubating_15m {
+        [*] --> edge_timer_active : Onboard 15-Min Timer Starts
+        edge_timer_active --> edge_timer_expired : 900 Seconds Elapsed
+    }
+
+    incubating_15m --> mesh_biochar_filtering : Timer Expired (Return & Filter)
+    mesh_biochar_filtering --> post_evaluating : Net Swept & Biochar Filtration Complete
+    
+    state adaptive_branching <<choice>>
+    post_evaluating --> adaptive_branching : Analyze Post-Treatment Readings
+
+    adaptive_branching --> adaptive_stabilization : Turbidity > 20 NTU OR pH > 7.5
+    adaptive_branching --> completed : Water Remediated (NTU < 20 & pH 6.0-7.0)
+
+    adaptive_stabilization --> completed : Citric Acid / Secondary Floc Dosed
+    completed --> idle : Heartbeat Auto-Reset (Ready for Next Waypoint)
+
+    navigating --> failsafe_buoyancy : GPS Signal Lost (none)
+    failsafe_buoyancy --> navigating : Ballast Pumped Out & GPS Reacquired
+```
+
+### State Definitions
+
+1. **`idle`**: Robot is stationary in open water, awaiting mission dispatch. `target_waypoint_id` is null.
+2. **`navigating`**: Robot is autonomously self-navigating toward the target waypoint coordinates using GPS and SONAR obstacle detection.
+3. **`baseline_evaluating`**: Robot has entered the 2-meter geofence radius. It halts propulsion, stabilizes, and captures baseline sensor readings (Turbidity, pH, TDS, Temperature, NIR image).
+4. **`dispensing_flocculant`**: System categorizes pollution level (Low: 20–50 mg/L, Med: 50–120 mg/L, High: 120–200 mg/L), activates the magnetic stirrer, and operates the 120 mL/min pump to dispense the exact Moringa-Chitosan dosage.
+5. **`incubating_15m`**: The robot activates a local 15-minute (900s) countdown timer to allow macro-floc aggregation. The onboard controller broadcasts `timer_remaining_sec` over WebSockets every 5 seconds.
+6. **`mesh_biochar_filtering`**: Upon timer completion, the robot maneuvers across the treatment zone to trap aggregated flocs via its collection mesh and filter dissolved pollutants through the biochar cartridge.
+7. **`post_evaluating`**: Robot captures the `after` sensor reading suite to measure remediation delta.
+8. **`adaptive_stabilization`**: If turbidity remains > 20 NTU, secondary Moringa-Chitosan is dosed; if pH is elevated (> 7.5), Citric Acid is dispensed via secondary pump to stabilize pH to target window (6.0–7.0).
+9. **`completed`**: Waypoint is marked `treated = True`, treatment event summary is finalized, and mission state transitions back to `idle`.
+10. **`failsafe_buoyancy`**: Triggered when `gps_signal == "none"`. The 120 mL/min circulation pump evacuates ballast water to elevate the antenna mast until GPS lock is restored.
+
+---
+
+## 3. Folder Structure
 
 ```text
 app/
-├── main.py          # App factory: creates FastAPI instance, includes all routers
-├── core/            # Infrastructure and configuration
-│   ├── config.py    # Reads .env, exposes Settings object
-│   ├── database.py  # Motor client; exposes get_database()
-│   └── auth.py      # verify_api_key FastAPI dependency
-├── models/          # Python dataclasses / TypedDicts describing raw Mongo documents
-├── schemas/         # Pydantic v2 models for request validation & response serialization
-├── routers/         # FastAPI APIRouter instances — thin, delegate logic to services/
-├── services/        # Business logic and AI service implementation
-└── utils/           # Shared utilities
+├── main.py          # App factory: FastAPI initialization, CORS, router mounting
+├── core/            # Infrastructure & configuration
+│   ├── config.py    # Environment settings via python-dotenv
+│   ├── database.py  # Async Motor MongoDB connection pool
+│   └── auth.py      # verify_api_key FastAPI dependency (X-API-Key)
+├── models/          # MongoDB document schemas / typing
+├── schemas/         # Pydantic v2 validation & response models
+│   ├── sensor_reading.py
+│   ├── robot_status.py
+│   ├── treatment_event.py
+│   ├── waypoint.py
+│   └── chat_log.py
+├── routers/         # Thin API controllers
+│   ├── sensor_readings.py
+│   ├── robot_status.py
+│   ├── treatment_events.py
+│   ├── waypoints.py
+│   ├── ai_chat.py
+│   └── websockets.py
+├── services/        # Domain business logic
+│   ├── ai_service.py         # Google Gemini integration & context grounding
+│   └── connection_manager.py # WebSocket real-time broadcast registry
+└── utils/           # BSON ObjectId helpers and serialization
 ```
 
-## 3. Layer Responsibilities
-
-- **core/**: Handles database connections, environment configuration, and authentication dependencies.
-- **models/**: Defines the raw shape of documents as they exist in MongoDB.
-- **schemas/**: Defines Pydantic models for request body validation and response serialization.
-- **routers/**: HTTP/API layer. Routes should be thin, delegating heavy logic to `services/`.
-- **services/**: Contains business logic, AI provider integration, and any complex computed behavior.
-- **utils/**: Contains generic helpers (e.g., ObjectId string conversion).
+---
 
 ## 4. Authentication Boundaries
 
-- **Robot write endpoints** (`POST /api/sensor-readings`, `POST /api/robot-status/{id}`, `POST /api/treatment-events`) require an `X-API-Key` header.
-- **App-facing reads and AI chat** are currently unauthenticated. (App-user authentication is out of scope for now).
+- **Hardware Write Endpoints** (`POST /api/sensor-readings`, `POST /api/robot-status/{id}`, `POST /api/treatment-events`) require an `X-API-Key` header matching server configuration.
+- **Client Read Endpoints & AI Chat** are unauthenticated for direct integration with companion Web and Mobile clients.
 
-## 5. Database Relationships
+---
 
-| Collection | Purpose | Key indexes |
+## 5. Database Schema & Collections
+
+| Collection | Purpose | Key Indexes |
 |---|---|---|
-| `sensor_readings` | One doc per sensor snapshot (before or after treatment) | `robot_id`, `waypoint_id`, `timestamp` descending |
-| `waypoints` | GPS treatment points, up to 6 per robot | `robot_id` |
-| `robot_status` | One doc per robot (upserted on each heartbeat) | `robot_id` unique |
-| `treatment_events` | One doc per flocculation treatment cycle | `robot_id`, `waypoint_id` |
-| `ai_chat_logs` | User and assistant messages | `user_id`, `timestamp` ascending |
+| `sensor_readings` | Before/After snapshots (Turbidity, pH, TDS, Temp, Obstacle Data) | `robot_id`, `waypoint_id`, `timestamp` descending |
+| `waypoints` | GPS mission coordinates (max 6 per robot, 2m radius) | `robot_id` |
+| `robot_status` | Real-time robot state, tank levels, incubation countdown, failsafes | `robot_id` unique |
+| `treatment_events` | Comprehensive log of closed-loop cycles (Dual reagents, biochar, timer) | `robot_id`, `waypoint_id`, `started_at` descending |
+| `ai_chat_logs` | Context-grounded multi-turn chat history | `user_id`, `timestamp` ascending |
 
-### Notes on Data Relationships
-- A `sensor_reading` links to a `waypoint` via `waypoint_id` (ObjectId string).
-- A `waypoint` stores `before_reading_id` and `after_reading_id` — these are updated via `PATCH /api/waypoints/{id}` after readings are created.
-- `GET /api/waypoints/{id}` resolves and inlines the referenced reading objects so the app avoids a second round-trip.
-- **Deleting a waypoint does not cascade-delete readings or treatment events** — historical data is preserved, references are simply unlinked.
-- `robot_status` tracks the currently active `target_waypoint_id` and `mission_state` so both the hardware and mobile app share a single source of truth on which waypoint is being serviced and the robot's progress toward it.
+---
 
-## 6. AI Service Design
+## 6. AI Engine Architecture (Google Gemini)
 
-The AI interprets sensor data and treatment outcomes for non-technical users. 
+SHELLOC utilizes **Google Gemini** (`gemini-3.7-flash` via the official `google-genai` SDK) as its dedicated AI engine.
 
-### Context Building
-The AI service (`services/ai_service.py`) queries MongoDB and builds a compact context summary including:
-- Latest robot status
-- Latest sensor reading per waypoint
-- Any critical waypoints
+### Operational Domain Grounding
+The AI service dynamically builds a live context snapshot including:
+- Current robot coordinates, mission state, and active timer.
+- Consumable levels (Moringa-Chitosan tank %, Citric Acid tank %, Biochar health).
+- Latest sensor readings across all waypoints.
+- Environmental domain rules:
+  - **Turbidity (NTU):** `< 20 NTU` = Remediated; `20–50 NTU` = Borderline; `> 50 NTU` = Critical/Severe.
+  - **pH:** `< 6.0` = Acidic; `6.0–7.0` = Target stabilized window; `> 7.5` = Elevated alkaline (Citric Acid deployment required).
+  - **TDS (ppm):** `> 400 ppm` = High particulate load; `~200–250 ppm` = Target remediated baseline.
+  - **Closed-Loop Logic:** 15-minute incubation period, biochar filtration, and adaptive secondary dosing.
 
-### Provider Implementation
-The backend integrates with Google Gemini using the official `google-genai` SDK (targeting `gemini-3.7-flash`). While `AI_PROVIDER` configuration exists for multi-provider extensibility, OpenAI and Claude currently remain **unimplemented placeholders**.
+---
 
-### Multi-Turn Conversational Memory
-To maintain chat context without unbounded token growth, `ai_service.py` queries `db.ai_chat_logs` for the most recent `MAX_CHAT_HISTORY` (configured to `5`) messages for the requesting `user_id`. These past exchanges are converted to `types.Content` objects (with `"user"` and `"model"` roles) and prepended to the Gemini generation request.
+## 7. Edge vs. Cloud Responsibilities
 
-### System Instruction & Domain Grounding
-The AI model is guided by a comprehensive `SYSTEM_INSTRUCTION` that grounds its responses in research-backed water quality standards:
-- **Turbidity (NTU):** `< 20 NTU` = good/remediated (monitoring only); `20–50 NTU` = borderline; `> 50 NTU` = critical/severe (requires active treatment). Untreated baseline is typically 110.33–146.51 NTU, and post-treatment target is 10.40–16.25 NTU.
-- **pH:** `< 6.0` = acidic/degraded (requires stabilization); `6.0–7.0` = target stabilized post-treatment window (mean ~6.46); `> 7.5–8.5` = borderline/elevated alkaline. Untreated baseline is typically 4.95–6.03.
-- **TDS (ppm):** `> 400 ppm` = high dissolved particulate load; `~200–250 ppm` = target remediated state. Untreated baseline is typically 394.16–485.13 ppm, and post-treatment target is 197.16–243.12 ppm.
-- **Flocculant Dosage (Moringa-Chitosan):** Adaptive dosage based on turbidity. If `< 20 NTU`: no additional flocculant, monitoring only. If `20–50 NTU`: moderate dosage via pump. If `> 50 NTU` (or baseline `> 100 NTU`): full/maximum standard dosage for rapid macro-floc aggregation.
-- **Geofence Boundary:** 2-meter radius from the target waypoint.
-
-Concrete recommendations (such as dosage adjustments or status verdicts) are explicitly structured with bold callouts (e.g., `**Recommendation:** ...`) for readability.
-
-### Error Handling & Resilience
-External AI calls are wrapped in exception handlers. If the Gemini API call fails due to invalid credentials, rate limiting, or network unavailability, `ai_service.py` catches the error and returns a formatted Markdown error message (`**Error:** ...`) instead of raising an unhandled exception. This ensures the `/api/ai-chat/` endpoint never returns a `500 Internal Server Error` due to upstream AI provider failures.
+| Responsibility | Edge Controller (Raspberry Pi) | Cloud Backend (FastAPI + Mongo) |
+| :--- | :--- | :--- |
+| **Sensor Sampling** | Reads analog/digital ADC channels (NTU, pH, TDS, Temp, SONAR) | Validates, timestamps, and indexes readings |
+| **Actuator Control** | Controls 120 mL/min pumps, magnetic stirrer, ballast pump | Stores dispensing telemetry and dosage logs |
+| **15-Min Timer** | **Runs onboard hardware countdown clock** | Receives remaining seconds & broadcasts to UI |
+| **GPS Failsafe** | **Directly triggers ballast pump on signal loss** | Broadcasts `buoyancy_failsafe` alert to UI |
+| **Offline Buffering**| Buffers telemetry during GPRS drops in local SQLite/JSON | Replays and ingests buffered data upon reconnect |
+| **AI Insights** | N/A | Evaluates holistic telemetry via Google Gemini |

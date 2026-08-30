@@ -8,10 +8,10 @@ from app.utils.bson import validate_object_id, serialize_doc
 
 router = APIRouter(prefix="/api/sensor-readings", tags=["Sensor Readings"])
 
-def compute_sensor_status(turbidity_ntu: float) -> str:
-    if turbidity_ntu < 20:
+def compute_sensor_status(turbidity_ntu: float, ph: float) -> str:
+    if turbidity_ntu < 20 and 6.0 <= ph <= 7.5:
         return "good"
-    elif turbidity_ntu <= 50:
+    elif turbidity_ntu <= 50 and 5.5 <= ph <= 8.0:
         return "borderline"
     else:
         return "critical"
@@ -31,7 +31,7 @@ async def create_sensor_reading(
         
     doc = reading.model_dump()
     doc["timestamp"] = datetime.now(timezone.utc)
-    doc["status"] = compute_sensor_status(reading.turbidity_ntu)
+    doc["status"] = compute_sensor_status(reading.turbidity_ntu, reading.ph)
     
     result = await db.sensor_readings.insert_one(doc)
     doc["_id"] = result.inserted_id

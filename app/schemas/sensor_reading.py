@@ -14,4 +14,4 @@ class SensorReadingCreate(BaseModel):
 class SensorReadingOut(SensorReadingCreate):
     id: str = Field(..., description="MongoDB ObjectId as string")
     timestamp: datetime = Field(..., description="Server-set UTC timestamp")
-    status: Literal["good", "borderline", "critical", "no_data"] = Field(..., description="Server-computed from turbidity_ntu")
+    status: Literal["good", "borderline", "critical", "no_data"] = Field(..., description="Server-computed from turbidity_ntu and ph")

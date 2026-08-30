@@ -1,131 +1,116 @@
 # Implementation Specification
 
-This file specifies HOW the backend must behave internally: validation rules, computed fields, business logic, and error handling. For endpoint definitions, see `api-reference.md`. For schema details, see `data-model.md`.
+This document defines HOW the SHELLOC backend behaves internally: validation rules, server-computed fields, state machine transitions, failsafe handling, and Google Gemini integration.
 
-## 1. Core Behavior
+---
+
+## 1. Core Behavior & Infrastructure
 
 ### Configuration (`core/config.py`)
-- Load environment variables once via `python-dotenv`.
-- Expose a single `Settings` object.
-- **Fail at startup** (raise error) if `MONGO_URI`, `DB_NAME`, `API_KEY`, `AI_PROVIDER`, or `AI_API_KEY` are missing.
+- Loads environment variables once via `python-dotenv`.
+- Validates essential parameters on startup (`MONGO_URI`, `DB_NAME`, `API_KEY`, `AI_PROVIDER`, `AI_API_KEY`).
+- `AI_PROVIDER` must be set to `"gemini"` targeting `gemini-3.7-flash`.
 
-### Database (`core/database.py`)
-- Create the Motor async database connection once at module load (single client), not per-request.
-- Expose `get_database()`.
+### Database Driver (`core/database.py`)
+- Manages a persistent async Motor connection pool.
+- Exposes `get_database()`.
 
-### Authentication (`core/auth.py`)
-- Define a FastAPI dependency `verify_api_key` that checks the incoming `X-API-Key` header against `config.API_KEY`.
-- Return `401 Unauthorized` on mismatch.
-- Apply ONLY to robot write endpoints (`POST /api/sensor-readings`, `POST /api/robot-status/{id}`, `POST /api/treatment-events`).
+### Authentication Boundaries (`core/auth.py`)
+- FastAPI dependency `verify_api_key` validates the `X-API-Key` header against `config.API_KEY`.
+- Enforced on all robot write endpoints (`POST /api/sensor-readings`, `POST /api/robot-status/{id}`, `POST /api/treatment-events`).
+- Returns `401 Unauthorized` on missing or invalid key.
 
-### Error Handling
-- Use `HTTPException` appropriately.
-- Invalid `ObjectId` strings in path/query params MUST return `400 Bad Request`, not crash with a `500`. (Use `bson.ObjectId` and catch `bson.errors.InvalidId`).
-- Missing resources (e.g., getting a non-existent waypoint) MUST return `404 Not Found` with a clear message.
+---
 
-## 2. Status Computation Rules (Server-Computed)
+## 2. Server-Computed Status Rules
 
-These fields are **always computed by the server**. Ignore or override any client-submitted values for these fields.
+These fields are strictly computed by the server upon document ingestion to maintain integrity.
 
-### Sensor Reading `status`
-Computed from `turbidity_ntu` at insert time:
-- `turbidity_ntu < 20` → `"good"`
-- `20 ≤ turbidity_ntu ≤ 50` → `"borderline"`
-- `turbidity_ntu > 50` → `"critical"`
+### A. Sensor Reading `status`
+Computed from both `turbidity_ntu` and `ph`:
+```python
+def compute_sensor_status(turbidity_ntu: float, ph: float) -> str:
+    # Critical conditions
+    if turbidity_ntu > 50 or ph < 5.5 or ph > 8.5:
+        return "critical"
+    # Borderline conditions
+    elif (20 <= turbidity_ntu <= 50) or (5.5 <= ph < 6.0) or (7.5 < ph <= 8.5):
+        return "borderline"
+    # Good / Remediated conditions
+    else:
+        return "good"
+```
 
-### Robot Status `overall_status`
-Computed from `battery_percent`, `gps_signal`, and `operation_mode`:
-- Battery ≥ 20% and GPS good/weak → `"operational"`
-- Battery < 20% → `"low_battery"`
-- GPS none → `"gps_lost"`
-- Multiple issues → `"degraded"`
+### B. Robot Status `overall_status`
+Computed from battery percentage, GPS lock, and failsafe flags:
+- If `buoyancy_failsafe_active == True`: `"buoyancy_failsafe"`
+- If `battery_percent < 20` and `gps_signal == "none"`: `"degraded"`
+- If `battery_percent < 20`: `"low_battery"`
+- If `gps_signal == "none"`: `"gps_lost"`
+- Otherwise: `"operational"`
 
-## 3. Router Behavior
+---
 
-Keep routers thin. They should: parse input, call the database/services, and format responses.
+## 3. Closed-Loop Mission Lifecycle & State Machine
 
-### Sensor Readings
-- **Validation**: Verify `waypoint_id` exists before inserting. Return `404` if not found.
-- **Latest readings**: The `/latest` endpoint (given `robot_id`) queries the single most recent reading per waypoint. Used for map color-coding.
+SHELLOC operates on a 9-state closed-loop operational lifecycle:
 
-### Waypoints
-- **Constraints**: Enforce max **6 waypoints per `robot_id`** on POST. Return `400` if exceeded.
-- **Inlining**: `GET /{id}` should fetch the full `before_reading` and `after_reading` documents (if linked) and include them in the response.
-- **Deletion**: When deleting a waypoint, do NOT cascade-delete historical sensor readings or treatment events. Unlink references if needed, but preserve the historical documents.
+```
+[idle] 
+   └──> [navigating] (App dispatches target_waypoint_id)
+           └──> [baseline_evaluating] (Arrival inside 2m geofence)
+                   └──> [dispensing_flocculant] (Pollution classified, primary Moringa dosed)
+                           └──> [incubating_15m] (Onboard 15-min countdown active)
+                                   └──> [mesh_biochar_filtering] (Collection sweep & biochar absorption)
+                                           └──> [post_evaluating] (Measure after-treatment telemetry)
+                                                   └──> [adaptive_stabilization] (Citric acid if pH > 7.5; secondary floc if NTU > 20)
+                                                           └──> [completed] (Waypoint treated, returns to idle)
+[Failsafe Track]
+[navigating] ──(GPS signal lost)──> [failsafe_buoyancy] ──(Signal restored)──> [navigating]
+```
 
-### Robot Status
-- **Upsert**: The POST endpoint (hardware write) should UPSERT the document using the path param `robot_id` as the key.
-- Update `last_sync` to current server time on every upsert.
-- **WebSocket Broadcast**: On successful upsert, broadcast the serialized `RobotStatusOut` JSON payload to any clients connected to `/ws/robot/{robot_id}`.
-- **PATCH (Dispatch):** The PATCH endpoint (app write) merges only `target_waypoint_id` into the document. Validate the provided `target_waypoint_id` is a valid ObjectId and that the waypoint exists; return `404` if not. Return `400` if the robot's current `mission_state` is not `"idle"` or `"completed"` (i.e., reject a new dispatch if the robot is already navigating or treating). Setting `target_waypoint_id` to `null` cancels the active target and resets `mission_state` to `"idle"`. On successful PATCH, broadcast the updated status via WebSocket.
-- The robot reads `target_waypoint_id` from its `GET /api/robot-status/{id}` poll response to know where to navigate next.
+### State-by-State Execution Logic
 
-### Treatment Events
-- **Validation**: Verify `waypoint_id` exists before inserting. Return `404` if not found.
-- **Timestamps**: Set `started_at` to server time on create. `ended_at` and `outcome` are currently nullable and out of scope for v1 (to be added via future PATCH).
+1. **`idle`**: Robot rests on water. `target_waypoint_id` is null. Ready for dispatch.
+2. **`navigating`**: App issues `PATCH /api/robot-status/{id}` with `target_waypoint_id`. The robot begins heading toward target coordinates while polling SONAR for obstacle avoidance.
+3. **`baseline_evaluating`**: When distance to target center is $\le 2.0\text{ m}$ (`radius_meters`), robot transitions to `baseline_evaluating`. Captures baseline telemetry and posts `SensorReadingCreate` with `phase: "before"`.
+4. **`dispensing_flocculant`**: Evaluates baseline turbidity/SPM:
+   - Low: $20\text{–}50\text{ mg/L}$ (or equivalent NTU)
+   - Medium: $50\text{–}120\text{ mg/L}$
+   - High: $120\text{–}200\text{ mg/L}$  
+   Activates the magnetic stirring compartment and 120 mL/min circulation pump to dispense the calculated Moringa-Chitosan volume.
+5. **`incubating_15m`**: Robot holds position for **900 seconds** (15 minutes). The countdown runs locally on the Raspberry Pi edge controller. The robot streams `timer_remaining_sec` in its 5-second heartbeat so clients display a live countdown.
+6. **`mesh_biochar_filtering`**: Robot executes a localized sweep across the 2m perimeter, capturing aggregated flocs with its collection mesh and circulating water through the biochar filter to absorb residual dissolved organics and metals.
+7. **`post_evaluating`**: Robot captures the post-treatment reading suite and posts `SensorReadingCreate` with `phase: "after"`.
+8. **`adaptive_stabilization`**: Closed-loop feedback check:
+   - If `turbidity_ntu > 20`: Deploys secondary Moringa-Chitosan micro-dose.
+   - If `ph > 7.5`: Deploys Citric Acid micro-dose via secondary dispensary pump to neutralize alkalinity toward the target $6.0\text{–}7.0$ pH window.
+   - Logged in `TreatmentEventCreate` with `secondary_treatment_applied: True`.
+9. **`completed`**: Updates waypoint (`PATCH /api/waypoints/{id}`, `treated: True`, links reading IDs), increments `points_treated_today`, and resets `mission_state` to `"idle"`.
 
-### AI Chat
-- Flow for `POST /api/ai-chat`:
-  1. Save user message to `ai_chat_logs`.
-  2. Call `ai_service.build_context(robot_id)` to get compact data.
-  3. Call `ai_service.get_ai_reply(message, context, user_id)` to fetch recent chat history and call the Gemini provider.
-  4. Save assistant reply with `context_snapshot`.
-  5. Return assistant message.
+---
 
-## 4. Mission Lifecycle & 2-Meter Geofence
+## 4. Edge Architecture & Failsafe Handling
 
-### Single-Waypoint Dispatch Model
-The robot operates on **one waypoint at a time**. The full mission cycle is:
+### A. Edge-Orchestrated 15-Minute Countdown
+- **Resilience:** The 15-minute incubation timer runs directly on the Raspberry Pi edge controller. If cellular connectivity drops during incubation, the timer continues unimpeded.
+- **WebSocket Broadcast:** The backend receives `timer_remaining_sec` on each heartbeat and broadcasts the updated payload to connected clients over `/ws/robot/{robot_id}`.
 
-1. **Idle** (`mission_state: "idle"`):
-   - No active target. Robot is stationary and awaiting dispatch.
-   - `target_waypoint_id` is `null`.
+### B. GPS Buoyancy Control Failsafe
+- If `gps_signal == "none"` continuously for $> 10\text{ seconds}$ during navigation:
+  1. Firmware enters `failsafe_buoyancy` state.
+  2. Activates the 120 mL/min ballast pump to evacuate ballast water.
+  3. Increased buoyancy elevates the vessel and raises the GPS/cellular antenna mast above water surface waves.
+  4. Once satellite lock is reacquired, normal navigation resumes.
 
-2. **Dispatch** (Mobile App → `PATCH /api/robot-status/{id}`):
-   - The app sets `target_waypoint_id` to the selected waypoint's ObjectId.
-   - The robot reads this on its next heartbeat poll and begins navigating.
+---
 
-3. **Navigating** (`mission_state: "navigating"`):
-   - Robot is autonomously moving toward `target_waypoint_id` coordinates.
-   - Robot sends heartbeat POSTs with current `current_lat`, `current_lng`, and `mission_state: "navigating"`.
+## 5. Google Gemini AI Engine (`services/ai_service.py`)
 
-4. **Inside Boundary** (`mission_state: "inside_boundary"`):
-   - The robot's GPS position is within **2 meters** of the waypoint center (`latitude`, `longitude`).
-   - The 2m radius is the default value of `radius_meters` stored on the waypoint document.
-   - The robot transitions to treatment immediately upon entering the boundary.
-
-5. **Treating** (`mission_state: "treating"`):
-   - Robot takes a `before` sensor reading (`POST /api/sensor-readings`, `phase: "before"`).
-   - Robot disperses Moringa-Chitosan flocculant.
-   - Robot waits for floc aggregation.
-   - Robot takes an `after` sensor reading (`POST /api/sensor-readings`, `phase: "after"`).
-   - Robot logs the treatment cycle (`POST /api/treatment-events`).
-   - Robot patches the waypoint to mark it treated (`PATCH /api/waypoints/{id}`, `treated: true`, linking reading IDs).
-
-6. **Completed** (`mission_state: "completed"`):
-   - Treatment is finished. Robot sends a final heartbeat with `mission_state: "completed"`.
-   - The backend does not auto-reset. The robot sends a subsequent heartbeat with `mission_state: "idle"` to signal readiness for the next dispatch.
-
-### Boundary Arrival Computation
-- The 2m proximity check is **performed by the robot's onboard firmware**, not the backend.
-- The backend simply stores and passes through `mission_state` as reported by the robot.
-- The `radius_meters` field on the waypoint document is the authoritative boundary value the firmware should use. It defaults to `2.0`.
-
-## 5. Open Decisions
-
-> [!WARNING]
-> The following items are currently unspecified or have conflicting interpretations in the existing specifications. If modifying these areas, check the existing codebase for precedence or seek clarification.
-
-- **Treatment Event Lifecycle**: Currently, `POST /treatment-events` creates an event. `ended_at` and `outcome` are null. It is undetermined whether the robot sends a subsequent `PATCH` or if it sends a complete event after it finishes. For v1, simple insertion is sufficient.
-- **App-User Authentication**: No app-facing authentication exists. Do not implement JWT or user accounts unless specifically requested.
-
-## 6. Implementation Build Order
-When implementing the backend from scratch, follow this order:
-1. `core/config.py` → `core/database.py`
-2. `sensor_readings` (schemas, models, router)
-3. `waypoints`
-4. `robot_status`
-5. `treatment_events`
-6. `core/auth.py`
-7. `services/ai_service.py` & `ai_chat` router
-8. `main.py` wiring
+- Integrated via `google-genai` SDK targeting model `gemini-3.7-flash`.
+- Injects a grounded context snapshot containing:
+  - Active robot telemetry, mission state, and remaining timer seconds.
+  - Consumable reservoir levels (Moringa-Chitosan %, Citric Acid %, Biochar health).
+  - Linked waypoint before/after comparative sensor deltas.
+- **Conversational Memory:** Preserves the last 5 turns per `user_id` from `ai_chat_logs`.
+- Formats recommendations with bold callouts (`**Recommendation:** ...`).

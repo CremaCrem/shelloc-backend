@@ -1,130 +1,181 @@
 # Data Model Schema Reference
 
-Quick-reference for all Pydantic schema classes and MongoDB document structures. For full behavioral specs (computed fields, validation rules), see `implementation-spec.md`.
+This document provides the canonical schema reference for all Pydantic v2 data models and MongoDB document structures within the SHELLOC backend.
 
 ## Conventions
 
-- **`id`**: always a `str` (MongoDB ObjectId serialized to string) in response schemas.
-- **`robot_id`**: plain string identifier for the robot.
-- **`waypoint_id`**: MongoDB ObjectId string referencing a waypoint document.
-- **Server-set fields**: marked with _(server-set)_. Never trust these from client input.
-- **Optional fields** default to `None` unless otherwise noted.
+- **`id`**: MongoDB ObjectId serialized to a 24-character hexadecimal string.
+- **`robot_id`**: String identifier for the physical robot (e.g., `"SHELLOC-01"`).
+- **`waypoint_id`**: String referencing a valid waypoint document ID.
+- **Server-set fields**: Computed or timestamped by the server. Cannot be overwritten by clients.
+- **Optional fields**: Default to `None` unless explicitly noted.
 
-## 1. Sensor Readings
+---
+
+## 1. Sensor Readings (`sensor_readings`)
+
+Stores water quality telemetry snapshots captured by the robot before and after remediation cycles.
 
 ### Request Schema (`SensorReadingCreate`)
-| Field | Type | Required | Notes |
+
+| Field | Type | Required | Description |
 |---|---|---|---|
-| `robot_id` | `str` | yes | |
-| `waypoint_id` | `str` | yes | ObjectId string; validated to exist |
-| `phase` | `Literal["before", "after"]` | yes | Reading taken before or after treatment |
-| `turbidity_ntu` | `float` | yes | NTU units |
-| `ph` | `float` | yes | pH scale 0–14 |
-| `tds_ppm` | `float` | yes | Total dissolved solids in ppm |
-| `nir_floc_score` | `float` | no | Default `None`; NIR-derived floc aggregation score |
+| `robot_id` | `str` | Yes | Unique identifier of the reporting robot |
+| `waypoint_id` | `str` | Yes | ObjectId string of the associated waypoint |
+| `phase` | `Literal["before", "after"]` | Yes | Reading taken prior to dosing or post-remediation |
+| `turbidity_ntu` | `float` | Yes | Water turbidity in Nephelometric Turbidity Units (NTU) |
+| `ph` | `float` | Yes | Acidity / alkalinity index (0.0 – 14.0 scale) |
+| `tds_ppm` | `float` | Yes | Total Dissolved Solids in parts per million (ppm) |
+| `temperature_celsius` | `float` | No | Water temperature in degrees Celsius (°C) |
+| `nir_floc_score` | `float` | No | Near-Infrared optical floc aggregation index (0.0 – 1.0) |
+| `obstacle_detected` | `bool` | No | Boolean flag indicating SONAR underwater object proximity |
+| `sonar_distance_cm` | `float` | No | Distance to nearest underwater object in centimeters |
 
 ### Response Schema (`SensorReadingOut`)
+
 All request fields, plus:
+
 | Field | Type | Notes |
 |---|---|---|
-| `id` | `str` | MongoDB `_id` as string |
-| `timestamp` | `datetime` | _(server-set)_ UTC insert time |
-| `status` | `Literal["good", "borderline", "critical", "no_data"]` | _(server-set)_ computed from `turbidity_ntu` |
+| `id` | `str` | MongoDB `_id` serialized as string |
+| `timestamp` | `datetime` | _(server-set)_ UTC creation timestamp |
+| `status` | `Literal["good", "borderline", "critical", "no_data"]` | _(server-set)_ Multi-parameter water health evaluation |
 
-## 2. Waypoints
+#### Status Computation Matrix:
+- **`"good"`**: `turbidity_ntu < 20` AND `6.0 <= ph <= 7.5`
+- **`"borderline"`**: `20 <= turbidity_ntu <= 50` OR `(5.5 <= ph < 6.0)` OR `(7.5 < ph <= 8.5)`
+- **`"critical"`**: `turbidity_ntu > 50` OR `ph < 5.5` OR `ph > 8.5`
+
+---
+
+## 2. Waypoints (`waypoints`)
+
+Stores mission coordinates and treatment status for up to 6 targets per robot.
 
 ### Request Schema (`WaypointCreate`)
-| Field | Type | Required | Notes |
+
+| Field | Type | Required | Description |
 |---|---|---|---|
-| `robot_id` | `str` | yes | |
-| `point_number` | `int` | yes | 1-based index |
-| `latitude` | `float` | yes | Decimal degrees |
-| `longitude` | `float` | yes | Decimal degrees |
-| `label` | `str` | no | Defaults to `f"Point {point_number}"` |
-| `radius_meters` | `float` | no | Boundary radius around the waypoint center. Defaults to `2.0`. The robot must be within this radius to begin treatment. |
+| `robot_id` | `str` | Yes | Associated robot identifier |
+| `point_number` | `int` | Yes | 1-based target index (1 to 6) |
+| `latitude` | `float` | Yes | GPS latitude in decimal degrees |
+| `longitude` | `float` | Yes | GPS longitude in decimal degrees |
+| `label` | `str` | No | Custom label (defaults to `"Point {point_number}"`) |
+| `radius_meters` | `float` | No | Geofence arrival boundary radius (default `2.0` meters) |
 
 ### Update Schema (`WaypointUpdate`)
-All optional:
-| Field | Type |
-|---|---|
-| `treated` | `bool` |
-| `before_reading_id` | `str` |
-| `after_reading_id` | `str` |
-| `treated_at` | `datetime` |
 
-### Response Schema (`WaypointOut`)
-All create fields, plus:
 | Field | Type | Notes |
 |---|---|---|
-| `id` | `str` | MongoDB `_id` as string |
-| `treated` | `bool` | Default `False` |
-| `created_at` | `datetime` | _(server-set)_ |
-| `treated_at` | `datetime \| None` | Nullable until treated |
-| `before_reading_id` | `str \| None` | ObjectId string, nullable |
-| `after_reading_id` | `str \| None` | ObjectId string, nullable |
-| `radius_meters` | `float` | Boundary radius (defaults to `2.0`). Passed through from create. |
+| `treated` | `bool` | Set to `true` upon successful remediation cycle completion |
+| `before_reading_id` | `str` | ObjectId of the baseline sensor reading |
+| `after_reading_id` | `str` | ObjectId of the post-treatment sensor reading |
+| `treated_at` | `datetime` | UTC timestamp of completion |
 
-> **Note:** `GET /api/waypoints/{id}` returns this schema with `before_reading` and `after_reading` objects **inlined**. List endpoints return IDs only.
+### Response Schema (`WaypointOut` & `WaypointDetailOut`)
 
-## 3. Robot Status
+`WaypointOut` returns all create/update fields with `id` and `created_at`.  
+`WaypointDetailOut` inlines the full `before_reading` and `after_reading` objects to eliminate extra client round-trips.
+
+---
+
+## 3. Robot Status (`robot_status`)
+
+Single living document per robot upserted on every heartbeat (5-second interval).
 
 ### Request Schema (`RobotStatusUpdate`)
-| Field | Type | Required | Notes |
+
+| Field | Type | Required | Description |
 |---|---|---|---|
-| `operation_mode` | `Literal["autonomous", "manual"]` | yes | |
-| `gps_signal` | `Literal["good", "weak", "none"]` | no | |
-| `current_lat` | `float` | no | |
-| `current_lng` | `float` | no | |
-| `battery_percent` | `int` | yes | 0–100 |
-| `points_treated_today` | `int` | no | Default `0` |
-| `target_waypoint_id` | `str \| None` | no | ObjectId string of the waypoint the robot is currently dispatched to. `None` when idle. Set by the mobile app via `PATCH /api/robot-status/{id}`. |
-| `mission_state` | `Literal["idle", "navigating", "inside_boundary", "treating", "completed"]` | no | The robot's current mission phase. Updated by the robot on each heartbeat. Defaults to `"idle"`. |
+| `operation_mode` | `Literal["autonomous", "manual"]` | Yes | Operational navigation mode |
+| `gps_signal` | `Literal["good", "weak", "none"]` | No | GPS satellite lock quality |
+| `current_lat` | `float` | No | Current latitude coordinate |
+| `current_lng` | `float` | No | Current longitude coordinate |
+| `battery_percent` | `int` | Yes | Battery state of charge (0 – 100%) |
+| `points_treated_today` | `int` | No | Number of targets remediated in current session |
+| `target_waypoint_id` | `str \| None` | No | ObjectId of the target waypoint the robot is dispatched to |
+| `mission_state` | `Literal[...]` | No | Current state in the 9-state closed-loop lifecycle (see below) |
+| `flocculant_tank_percent` | `int` | No | Moringa-Chitosan reagent reservoir level (0 – 100%) |
+| `citric_acid_tank_percent` | `int` | No | Citric Acid reagent reservoir level (0 – 100%) |
+| `biochar_health_status` | `Literal["optimal", "degraded", "replace"]` | No | Health / absorption capacity of biochar filter |
+| `timer_remaining_sec` | `int \| None` | No | Remaining seconds on the 15-minute incubation timer |
+| `buoyancy_failsafe_active` | `bool` | No | Active status of ballast evacuation pump for GPS recovery |
+
+#### Mission State Enum Values:
+- `"idle"`: Awaiting target dispatch
+- `"navigating"`: En route to target waypoint
+- `"baseline_evaluating"`: Inside 2m boundary, reading baseline parameters
+- `"dispensing_flocculant"`: Pumping adaptive Moringa-Chitosan dosage
+- `"incubating_15m"`: 15-minute macro-floc aggregation countdown active
+- `"mesh_biochar_filtering"`: Maneuvering to filter flocs and absorb dissolved ions
+- `"post_evaluating"`: Reading post-treatment parameters
+- `"adaptive_stabilization"`: Dispensing Citric Acid (pH) or secondary flocculant (NTU)
+- `"completed"`: Remediation finished for active target
+- `"failsafe_buoyancy"`: GPS signal lost; pumping ballast water to regain satellite lock
 
 ### Response Schema (`RobotStatusOut`)
+
 All update fields, plus:
+
 | Field | Type | Notes |
 |---|---|---|
-| `robot_id` | `str` | Path param used as document key |
-| `last_sync` | `datetime` | _(server-set)_ UTC upsert time |
-| `overall_status` | `str` | _(server-set)_ `"operational"` \| `"low_battery"` \| `"gps_lost"` \| `"degraded"` |
-| `target_waypoint_id` | `str \| None` | Passed through. The waypoint the robot is currently navigating to. |
-| `mission_state` | `str` | Passed through. The robot's current mission phase. |
+| `robot_id` | `str` | Path param used as primary document key |
+| `last_sync` | `datetime` | _(server-set)_ UTC timestamp of last heartbeat |
+| `overall_status` | `str` | _(server-set)_ `"operational"`, `"low_battery"`, `"gps_lost"`, `"buoyancy_failsafe"`, or `"degraded"` |
 
-## 4. Treatment Events
+---
+
+## 4. Treatment Events (`treatment_events`)
+
+Comprehensive historical log recording every closed-loop remediation cycle.
 
 ### Request Schema (`TreatmentEventCreate`)
-| Field | Type | Required | Notes |
+
+| Field | Type | Required | Description |
 |---|---|---|---|
-| `robot_id` | `str` | yes | |
-| `waypoint_id` | `str` | yes | ObjectId string; validated to exist |
-| `dosage_ml` | `float` | yes | Volume of flocculant dispensed (mL) |
-| `pollution_level` | `Literal["low", "medium", "high"]` | yes | Robot-assessed pollution level |
-| `floc_aggregation_time_sec` | `int` | no | Time for floc to form (seconds) |
-| `eta_next_area_sec` | `int` | no | Estimated travel time to next waypoint |
+| `robot_id` | `str` | Yes | Reporting robot ID |
+| `waypoint_id` | `str` | Yes | Target waypoint ObjectId string |
+| `pollution_level` | `Literal["low", "medium", "high"]` | Yes | Classified pollution tier (Low: 20-50, Med: 50-120, High: 120-200 mg/L) |
+| `flocculant_dosed_ml` | `float` | Yes | Primary Moringa-Chitosan volume dispensed (mL) |
+| `citric_acid_dosed_ml` | `float` | No | Citric Acid volume dispensed for pH stabilization (mL, default `0.0`) |
+| `biochar_filtration_applied`| `bool` | No | Whether biochar cartridge and mesh sweep completed (default `True`) |
+| `floc_aggregation_time_sec`| `int` | No | Duration of flocculation incubation (default `900` seconds / 15 mins) |
+| `secondary_treatment_applied`| `bool` | No | Flag indicating if adaptive post-treatment dosing was required |
+| `secondary_reagent_type` | `Literal["flocculant", "citric_acid"] \| None` | No | Reagent used in secondary cycle |
+| `secondary_dosage_ml` | `float \| None` | No | Volume used in secondary cycle (mL) |
+| `eta_next_area_sec` | `int \| None` | No | Estimated transit time to next waypoint |
 
 ### Response Schema (`TreatmentEventOut`)
+
 All create fields, plus:
+
 | Field | Type | Notes |
 |---|---|---|
-| `id` | `str` | MongoDB `_id` as string |
-| `started_at` | `datetime` | _(server-set)_ UTC insert time |
-| `ended_at` | `datetime \| None` | Nullable |
-| `outcome` | `Literal["collected", "recollection_needed"] \| None` | Nullable |
+| `id` | `str` | MongoDB `_id` serialized as string |
+| `started_at` | `datetime` | _(server-set)_ UTC cycle initiation timestamp |
+| `ended_at` | `datetime \| None` | UTC cycle completion timestamp |
+| `outcome` | `Literal["remediated", "stabilized", "recollection_needed", "flagged_manual"] \| None` | Remediation result classification |
 
-## 5. AI Chat Logs
+---
+
+## 5. AI Chat Logs (`ai_chat_logs`)
+
+Maintains conversational state and domain context between the user and Google Gemini.
 
 ### Request Schema (`ChatMessageCreate`)
-| Field | Type | Required | Notes |
+
+| Field | Type | Required | Description |
 |---|---|---|---|
-| `user_id` | `str` | yes | App user identifier |
-| `robot_id` | `str` | yes | Used to build context |
-| `message` | `str` | yes | The user's question |
+| `user_id` | `str` | Yes | Client session identifier |
+| `robot_id` | `str` | Yes | Target robot for context snapshot grounding |
+| `message` | `str` | Yes | User inquiry or diagnostic request |
 
 ### Response Schema (`ChatMessageOut`)
+
 | Field | Type | Notes |
 |---|---|---|
 | `id` | `str` | MongoDB `_id` as string |
-| `role` | `Literal["user", "assistant"]` | |
-| `message` | `str` | The message content |
-| `timestamp` | `datetime` | _(server-set)_ UTC |
-| `context_snapshot` | `object \| None` | Only on assistant messages |
+| `role` | `Literal["user", "assistant"]` | Message author |
+| `message` | `str` | Text content (Markdown supported) |
+| `timestamp` | `datetime` | _(server-set)_ UTC timestamp |
+| `context_snapshot` | `dict \| None` | Injected telemetry snapshot for assistant messages |
