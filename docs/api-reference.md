@@ -99,4 +99,25 @@ Robot write endpoints require authentication via `X-API-Key` header.
 
 | Protocol | Path | Auth | Description |
 |---|---|---|---|
-| `WebSocket` | `/{robot_id}` | None | Open a persistent stream to receive instant JSON broadcasts of `RobotStatusOut` whenever the robot publishes a heartbeat or transitions mission state. |
+| `WebSocket` | `/{robot_id}` | None | Open a persistent stream. Broadcasts `RobotStatusOut` on heartbeat. Accepts incoming bi-directional control messages from mobile clients. |
+
+### Incoming Client Messages (Bi-directional)
+
+Clients can send the following JSON payloads over the established WebSocket to override robot behavior:
+
+**1. Manual Joystick Control:**
+```json
+{
+  "event": "manual_control",
+  "data": { "x": <float -1.0 to 1.0>, "y": <float -1.0 to 1.0> }
+}
+```
+*Triggers the edge device to enter manual override and directly drive thrusters.*
+
+**2. Resume Autonomous Navigation:**
+```json
+{
+  "event": "resume_autonomous"
+}
+```
+*Exits manual override. Backend evaluates `target_waypoint_id` to either resume `navigating` or fallback to `idle`.*
