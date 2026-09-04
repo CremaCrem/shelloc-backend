@@ -53,7 +53,7 @@ Robot write endpoints require authentication via `X-API-Key` header.
 ### Payload Attributes (`RobotStatusUpdate`)
 - `operation_mode` (`"autonomous" | "manual"`), `battery_percent` (`0-100`)
 - `gps_signal` (`"good" | "weak" | "none"`), `current_lat` (`float`), `current_lng` (`float`)
-- `mission_state` (`"idle" | "navigating" | "baseline_evaluating" | "dispensing_flocculant" | "incubating_15m" | "mesh_biochar_filtering" | "post_evaluating" | "adaptive_stabilization" | "completed" | "failsafe_buoyancy"`)
+- `mission_state` (`"idle" | "navigating" | "baseline_evaluating" | "dispensing_flocculant" | "incubating_15m" | "mesh_biochar_filtering" | "post_evaluating" | "adaptive_stabilization" | "completed" | "failsafe_buoyancy" | "manual_override"`)
 - `flocculant_tank_percent` (`int`), `citric_acid_tank_percent` (`int`), `biochar_health_status` (`str`)
 - `timer_remaining_sec` (`int`, optional)
 - `buoyancy_failsafe_active` (`bool`, optional)
@@ -99,7 +99,23 @@ Robot write endpoints require authentication via `X-API-Key` header.
 
 | Protocol | Path | Auth | Description |
 |---|---|---|---|
-| `WebSocket` | `/{robot_id}` | None | Open a persistent stream. Broadcasts `RobotStatusOut` on heartbeat. Accepts incoming bi-directional control messages from mobile clients. |
+| `WebSocket` | `/{robot_id}?role={role}` | None | Open a persistent stream. Broadcasts `RobotStatusOut` on heartbeat. `role` can be `mobile` or `edge`. Accepts incoming bi-directional control messages from mobile clients, routing them only to edge clients. |
+
+### Server-to-Client Broadcasts
+
+**1. Telemetry Stream:**
+```json
+{
+  "event": "telemetry",
+  "data": { 
+    "robot_id": "...", 
+    "operation_mode": "...",
+    "heading_degrees": 275.5,
+    "...": "..." 
+  }
+}
+```
+*Emitted to all connected clients whenever a robot heartbeat is received via POST `/api/robot-status/{id}` or a dispatch occurs. The `data` field contains the full `RobotStatusOut` schema.*
 
 ### Incoming Client Messages (Bi-directional)
 
@@ -120,4 +136,4 @@ Clients can send the following JSON payloads over the established WebSocket to o
   "event": "resume_autonomous"
 }
 ```
-*Exits manual override. Backend evaluates `target_waypoint_id` to either resume `navigating` or fallback to `idle`.*
+*Exits manual override. Backend evaluates `target_waypoint_id` to either resume `navigating` or fallback to `idle`. If the robot's `mission_state` is not `manual_override`, this command is ignored (no-op).*

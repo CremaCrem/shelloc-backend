@@ -1,0 +1,2009 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SHELLOC Backend API (Reloaded)",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health Check",
+        "description": "Basic health check for the FastAPI application and MongoDB connectivity.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/robot-status/{robot_id}": {
+      "post": {
+        "tags": [
+          "Robot Status"
+        ],
+        "summary": "Update Robot Status",
+        "description": "Upserts the robot status document.\nRequires X-API-Key authentication.",
+        "operationId": "update_robot_status_api_robot_status__robot_id__post",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Robot Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RobotStatusUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RobotStatusOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Robot Status"
+        ],
+        "summary": "Get Robot Status",
+        "description": "Retrieves the latest robot status. No authentication required.",
+        "operationId": "get_robot_status_api_robot_status__robot_id__get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Robot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RobotStatusOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Robot Status"
+        ],
+        "summary": "Dispatch Robot",
+        "description": "Dispatches the robot to a specific waypoint by setting target_waypoint_id.",
+        "operationId": "dispatch_robot_api_robot_status__robot_id__patch",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Robot Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RobotStatusDispatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RobotStatusOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/waypoints/": {
+      "post": {
+        "tags": [
+          "Waypoints"
+        ],
+        "summary": "Create Waypoint",
+        "operationId": "create_waypoint_api_waypoints__post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaypointCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaypointOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Waypoints"
+        ],
+        "summary": "List Waypoints",
+        "operationId": "list_waypoints_api_waypoints__get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Robot Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WaypointOut"
+                  },
+                  "title": "Response List Waypoints Api Waypoints  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/waypoints/robot/{robot_id}": {
+      "get": {
+        "tags": [
+          "Waypoints"
+        ],
+        "summary": "List Waypoints By Robot",
+        "operationId": "list_waypoints_by_robot_api_waypoints_robot__robot_id__get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Robot Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WaypointOut"
+                  },
+                  "title": "Response List Waypoints By Robot Api Waypoints Robot  Robot Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/waypoints/{id}": {
+      "get": {
+        "tags": [
+          "Waypoints"
+        ],
+        "summary": "Get Waypoint",
+        "operationId": "get_waypoint_api_waypoints__id__get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaypointDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Waypoints"
+        ],
+        "summary": "Update Waypoint",
+        "operationId": "update_waypoint_api_waypoints__id__patch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaypointUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaypointOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Waypoints"
+        ],
+        "summary": "Delete Waypoint",
+        "operationId": "delete_waypoint_api_waypoints__id__delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sensor-readings/": {
+      "post": {
+        "tags": [
+          "Sensor Readings"
+        ],
+        "summary": "Create Sensor Reading",
+        "operationId": "create_sensor_reading_api_sensor_readings__post",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SensorReadingCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SensorReadingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Sensor Readings"
+        ],
+        "summary": "List Sensor Readings",
+        "operationId": "list_sensor_readings_api_sensor_readings__get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Robot Id"
+            }
+          },
+          {
+            "name": "waypoint_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Waypoint Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SensorReadingOut"
+                  },
+                  "title": "Response List Sensor Readings Api Sensor Readings  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sensor-readings/latest": {
+      "get": {
+        "tags": [
+          "Sensor Readings"
+        ],
+        "summary": "Get Latest Readings",
+        "description": "Returns the single most recent reading per waypoint for the specified robot.",
+        "operationId": "get_latest_readings_api_sensor_readings_latest_get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Robot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SensorReadingOut"
+                  },
+                  "title": "Response Get Latest Readings Api Sensor Readings Latest Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sensor-readings/{id}": {
+      "get": {
+        "tags": [
+          "Sensor Readings"
+        ],
+        "summary": "Get Sensor Reading",
+        "operationId": "get_sensor_reading_api_sensor_readings__id__get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SensorReadingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/treatment-events/": {
+      "post": {
+        "tags": [
+          "Treatment Events"
+        ],
+        "summary": "Create Treatment Event",
+        "operationId": "create_treatment_event_api_treatment_events__post",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TreatmentEventCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreatmentEventOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Treatment Events"
+        ],
+        "summary": "List Treatment Events",
+        "operationId": "list_treatment_events_api_treatment_events__get",
+        "parameters": [
+          {
+            "name": "robot_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Robot Id"
+            }
+          },
+          {
+            "name": "waypoint_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Waypoint Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TreatmentEventOut"
+                  },
+                  "title": "Response List Treatment Events Api Treatment Events  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/treatment-events/{id}": {
+      "get": {
+        "tags": [
+          "Treatment Events"
+        ],
+        "summary": "Get Treatment Event",
+        "operationId": "get_treatment_event_api_treatment_events__id__get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreatmentEventOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai-chat/": {
+      "post": {
+        "tags": [
+          "AI Chat"
+        ],
+        "summary": "Send Chat Message",
+        "operationId": "send_chat_message_api_ai_chat__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatMessageCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai-chat/history": {
+      "get": {
+        "tags": [
+          "AI Chat"
+        ],
+        "summary": "Get Chat History",
+        "operationId": "get_chat_history_api_ai_chat_history_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChatMessageOut"
+                  },
+                  "title": "Response Get Chat History Api Ai Chat History Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ChatMessageCreate": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "description": "App user identifier"
+          },
+          "robot_id": {
+            "type": "string",
+            "title": "Robot Id",
+            "description": "Used to build context"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "The user's question"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "robot_id",
+          "message"
+        ],
+        "title": "ChatMessageCreate"
+      },
+      "ChatMessageOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "MongoDB ObjectId as string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "description": "Role of the message sender"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "The message content"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "Server-set UTC timestamp"
+          },
+          "context_snapshot": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Snapshot",
+            "description": "Context snapshot used by the assistant"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "message",
+          "timestamp"
+        ],
+        "title": "ChatMessageOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "RobotStatusDispatch": {
+        "properties": {
+          "target_waypoint_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Waypoint Id",
+            "description": "ObjectId string of the waypoint to dispatch the robot to. Null to cancel active target."
+          }
+        },
+        "type": "object",
+        "title": "RobotStatusDispatch"
+      },
+      "RobotStatusOut": {
+        "properties": {
+          "operation_mode": {
+            "type": "string",
+            "enum": [
+              "autonomous",
+              "manual"
+            ],
+            "title": "Operation Mode",
+            "description": "The current operation mode of the robot"
+          },
+          "gps_signal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "good",
+                  "weak",
+                  "none"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gps Signal",
+            "description": "Quality of the GPS signal"
+          },
+          "current_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Lat",
+            "description": "Current latitude"
+          },
+          "current_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Lng",
+            "description": "Current longitude"
+          },
+          "heading_degrees": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 360.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heading Degrees",
+            "description": "Robot heading in degrees (0-360)"
+          },
+          "battery_percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Battery Percent",
+            "description": "Battery percentage (0-100)"
+          },
+          "points_treated_today": {
+            "type": "integer",
+            "title": "Points Treated Today",
+            "description": "Number of waypoints treated today",
+            "default": 0
+          },
+          "target_waypoint_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Waypoint Id",
+            "description": "ObjectId string of the target waypoint, if dispatched"
+          },
+          "mission_state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "navigating",
+              "baseline_evaluating",
+              "dispensing_flocculant",
+              "incubating_15m",
+              "mesh_biochar_filtering",
+              "post_evaluating",
+              "adaptive_stabilization",
+              "completed",
+              "failsafe_buoyancy",
+              "manual_override"
+            ],
+            "title": "Mission State",
+            "description": "The robot's current mission phase",
+            "default": "idle"
+          },
+          "robot_id": {
+            "type": "string",
+            "title": "Robot Id",
+            "description": "The unique identifier for the robot"
+          },
+          "last_sync": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Sync",
+            "description": "Server-computed UTC timestamp of the last heartbeat"
+          },
+          "overall_status": {
+            "type": "string",
+            "title": "Overall Status",
+            "description": "Server-computed overall status (e.g., operational, low_battery, gps_lost, degraded)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_mode",
+          "battery_percent",
+          "robot_id",
+          "last_sync",
+          "overall_status"
+        ],
+        "title": "RobotStatusOut"
+      },
+      "RobotStatusUpdate": {
+        "properties": {
+          "operation_mode": {
+            "type": "string",
+            "enum": [
+              "autonomous",
+              "manual"
+            ],
+            "title": "Operation Mode",
+            "description": "The current operation mode of the robot"
+          },
+          "gps_signal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "good",
+                  "weak",
+                  "none"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gps Signal",
+            "description": "Quality of the GPS signal"
+          },
+          "current_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Lat",
+            "description": "Current latitude"
+          },
+          "current_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Lng",
+            "description": "Current longitude"
+          },
+          "heading_degrees": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 360.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heading Degrees",
+            "description": "Robot heading in degrees (0-360)"
+          },
+          "battery_percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Battery Percent",
+            "description": "Battery percentage (0-100)"
+          },
+          "points_treated_today": {
+            "type": "integer",
+            "title": "Points Treated Today",
+            "description": "Number of waypoints treated today",
+            "default": 0
+          },
+          "target_waypoint_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Waypoint Id",
+            "description": "ObjectId string of the target waypoint, if dispatched"
+          },
+          "mission_state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "navigating",
+              "baseline_evaluating",
+              "dispensing_flocculant",
+              "incubating_15m",
+              "mesh_biochar_filtering",
+              "post_evaluating",
+              "adaptive_stabilization",
+              "completed",
+              "failsafe_buoyancy",
+              "manual_override"
+            ],
+            "title": "Mission State",
+            "description": "The robot's current mission phase",
+            "default": "idle"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_mode",
+          "battery_percent"
+        ],
+        "title": "RobotStatusUpdate"
+      },
+      "SensorReadingCreate": {
+        "properties": {
+          "robot_id": {
+            "type": "string",
+            "title": "Robot Id",
+            "description": "The ID of the robot"
+          },
+          "waypoint_id": {
+            "type": "string",
+            "title": "Waypoint Id",
+            "description": "ObjectId string of the waypoint"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "before",
+              "after"
+            ],
+            "title": "Phase",
+            "description": "Reading taken before or after treatment"
+          },
+          "turbidity_ntu": {
+            "type": "number",
+            "title": "Turbidity Ntu",
+            "description": "Turbidity in NTU units"
+          },
+          "ph": {
+            "type": "number",
+            "title": "Ph",
+            "description": "pH scale 0-14"
+          },
+          "tds_ppm": {
+            "type": "number",
+            "title": "Tds Ppm",
+            "description": "Total dissolved solids in ppm"
+          },
+          "nir_floc_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nir Floc Score",
+            "description": "NIR-derived floc aggregation score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "robot_id",
+          "waypoint_id",
+          "phase",
+          "turbidity_ntu",
+          "ph",
+          "tds_ppm"
+        ],
+        "title": "SensorReadingCreate"
+      },
+      "SensorReadingOut": {
+        "properties": {
+          "robot_id": {
+            "type": "string",
+            "title": "Robot Id",
+            "description": "The ID of the robot"
+          },
+          "waypoint_id": {
+            "type": "string",
+            "title": "Waypoint Id",
+            "description": "ObjectId string of the waypoint"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "before",
+              "after"
+            ],
+            "title": "Phase",
+            "description": "Reading taken before or after treatment"
+          },
+          "turbidity_ntu": {
+            "type": "number",
+            "title": "Turbidity Ntu",
+            "description": "Turbidity in NTU units"
+          },
+          "ph": {
+            "type": "number",
+            "title": "Ph",
+            "description": "pH scale 0-14"
+          },
+          "tds_ppm": {
+            "type": "number",
+            "title": "Tds Ppm",
+            "description": "Total dissolved solids in ppm"
+          },
+          "nir_floc_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nir Floc Score",
+            "description": "NIR-derived floc aggregation score"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "MongoDB ObjectId as string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "Server-set UTC timestamp"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "good",
+              "borderline",
+              "critical",
+              "no_data"
+            ],
+            "title": "Status",
+            "description": "Server-computed from turbidity_ntu and ph"
+          }
+        },
+        "type": "object",
+        "required": [
+          "robot_id",
+          "waypoint_id",
+          "phase",
+          "turbidity_ntu",
+          "ph",
+          "tds_ppm",
+          "id",
+          "timestamp",
+          "status"
+        ],
+        "title": "SensorReadingOut"
+      },
+      "TreatmentEventCreate": {
+        "properties": {
+          "robot_id": {
+            "type": "string",
+            "title": "Robot Id",
+            "description": "The ID of the robot"
+          },
+          "waypoint_id": {
+            "type": "string",
+            "title": "Waypoint Id",
+            "description": "ObjectId string of the waypoint"
+          },
+          "moringa_chitosan_ml": {
+            "type": "number",
+            "title": "Moringa Chitosan Ml",
+            "description": "Volume of Moringa-Chitosan flocculant dispensed (mL)"
+          },
+          "citric_acid_ml": {
+            "type": "number",
+            "title": "Citric Acid Ml",
+            "description": "Volume of Citric Acid pH stabilizer dispensed (mL)"
+          },
+          "pollution_level": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Pollution Level",
+            "description": "Robot-assessed pollution level"
+          },
+          "floc_aggregation_time_sec": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floc Aggregation Time Sec",
+            "description": "Time for floc to form (seconds)"
+          },
+          "eta_next_area_sec": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eta Next Area Sec",
+            "description": "Estimated travel time to next waypoint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "robot_id",
+          "waypoint_id",
+          "moringa_chitosan_ml",
+          "citric_acid_ml",
+          "pollution_level"
+        ],
+        "title": "TreatmentEventCreate"
+      },
+      "TreatmentEventOut": {
+        "properties": {
+          "robot_id": {
+            "type": "string",
+            "title": "Robot Id",
+            "description": "The ID of the robot"
+          },
+          "waypoint_id": {
+            "type": "string",
+            "title": "Waypoint Id",
+            "description": "ObjectId string of the waypoint"
+          },
+          "moringa_chitosan_ml": {
+            "type": "number",
+            "title": "Moringa Chitosan Ml",
+            "description": "Volume of Moringa-Chitosan flocculant dispensed (mL)"
+          },
+          "citric_acid_ml": {
+            "type": "number",
+            "title": "Citric Acid Ml",
+            "description": "Volume of Citric Acid pH stabilizer dispensed (mL)"
+          },
+          "pollution_level": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Pollution Level",
+            "description": "Robot-assessed pollution level"
+          },
+          "floc_aggregation_time_sec": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floc Aggregation Time Sec",
+            "description": "Time for floc to form (seconds)"
+          },
+          "eta_next_area_sec": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eta Next Area Sec",
+            "description": "Estimated travel time to next waypoint"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "MongoDB ObjectId as string"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At",
+            "description": "Server-set UTC insert time"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At",
+            "description": "Nullable"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "collected",
+                  "recollection_needed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome",
+            "description": "Nullable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "robot_id",
+          "waypoint_id",
+          "moringa_chitosan_ml",
+          "citric_acid_ml",
+          "pollution_level",
+          "id",
+          "started_at"
+        ],
+        "title": "TreatmentEventOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WaypointCreate": {
+        "properties": {
+          "robot_id": {
+            "type": "string",
+            "title": "Robot Id",
+            "description": "The ID of the robot this waypoint belongs to"
+          },
+          "point_number": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 1.0,
+            "title": "Point Number",
+            "description": "1-based index of the waypoint (max 6)"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "Decimal degrees latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "Decimal degrees longitude"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Optional label, defaults to 'Point {point_number}'"
+          },
+          "radius_meters": {
+            "type": "number",
+            "title": "Radius Meters",
+            "description": "Boundary radius around the waypoint center. Defaults to 2.0",
+            "default": 2.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "robot_id",
+          "point_number",
+          "latitude",
+          "longitude"
+        ],
+        "title": "WaypointCreate"
+      },
+      "WaypointDetailOut": {
+        "properties": {
+          "robot_id": {
+            "type": "string",
+            "title": "Robot Id",
+            "description": "The ID of the robot this waypoint belongs to"
+          },
+          "point_number": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 1.0,
+            "title": "Point Number",
+            "description": "1-based index of the waypoint (max 6)"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "Decimal degrees latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "Decimal degrees longitude"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Optional label, defaults to 'Point {point_number}'"
+          },
+          "radius_meters": {
+            "type": "number",
+            "title": "Radius Meters",
+            "description": "Boundary radius around the waypoint center. Defaults to 2.0",
+            "default": 2.0
+          },
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "MongoDB ObjectId as string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Server-set UTC timestamp"
+          },
+          "treated": {
+            "type": "boolean",
+            "title": "Treated",
+            "description": "Whether this waypoint has been treated",
+            "default": false
+          },
+          "treated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Treated At",
+            "description": "UTC timestamp when treatment completed"
+          },
+          "before_reading_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Reading Id",
+            "description": "ObjectId string of the before treatment sensor reading"
+          },
+          "after_reading_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Reading Id",
+            "description": "ObjectId string of the after treatment sensor reading"
+          },
+          "before_reading": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Reading",
+            "description": "Inlined before_reading document"
+          },
+          "after_reading": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Reading",
+            "description": "Inlined after_reading document"
+          }
+        },
+        "type": "object",
+        "required": [
+          "robot_id",
+          "point_number",
+          "latitude",
+          "longitude",
+          "id",
+          "created_at"
+        ],
+        "title": "WaypointDetailOut"
+      },
+      "WaypointOut": {
+        "properties": {
+          "robot_id": {
+            "type": "string",
+            "title": "Robot Id",
+            "description": "The ID of the robot this waypoint belongs to"
+          },
+          "point_number": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 1.0,
+            "title": "Point Number",
+            "description": "1-based index of the waypoint (max 6)"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "Decimal degrees latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "Decimal degrees longitude"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Optional label, defaults to 'Point {point_number}'"
+          },
+          "radius_meters": {
+            "type": "number",
+            "title": "Radius Meters",
+            "description": "Boundary radius around the waypoint center. Defaults to 2.0",
+            "default": 2.0
+          },
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "MongoDB ObjectId as string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Server-set UTC timestamp"
+          },
+          "treated": {
+            "type": "boolean",
+            "title": "Treated",
+            "description": "Whether this waypoint has been treated",
+            "default": false
+          },
+          "treated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Treated At",
+            "description": "UTC timestamp when treatment completed"
+          },
+          "before_reading_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Reading Id",
+            "description": "ObjectId string of the before treatment sensor reading"
+          },
+          "after_reading_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Reading Id",
+            "description": "ObjectId string of the after treatment sensor reading"
+          }
+        },
+        "type": "object",
+        "required": [
+          "robot_id",
+          "point_number",
+          "latitude",
+          "longitude",
+          "id",
+          "created_at"
+        ],
+        "title": "WaypointOut"
+      },
+      "WaypointUpdate": {
+        "properties": {
+          "treated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Treated",
+            "description": "Whether this waypoint has been treated"
+          },
+          "before_reading_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Reading Id",
+            "description": "ObjectId string of the before treatment sensor reading"
+          },
+          "after_reading_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Reading Id",
+            "description": "ObjectId string of the after treatment sensor reading"
+          },
+          "treated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Treated At",
+            "description": "UTC timestamp when treatment completed"
+          }
+        },
+        "type": "object",
+        "title": "WaypointUpdate"
+      }
+    },
+    "securitySchemes": {
+      "APIKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    }
+  }
+}

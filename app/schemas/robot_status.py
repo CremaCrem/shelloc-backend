@@ -7,6 +7,7 @@ class RobotStatusUpdate(BaseModel):
     gps_signal: Optional[Literal["good", "weak", "none"]] = Field(None, description="Quality of the GPS signal")
     current_lat: Optional[float] = Field(None, description="Current latitude")
     current_lng: Optional[float] = Field(None, description="Current longitude")
+    heading_degrees: Optional[float] = Field(None, ge=0, le=360, description="Robot heading in degrees (0-360)")
     battery_percent: int = Field(..., ge=0, le=100, description="Battery percentage (0-100)")
     points_treated_today: int = Field(0, description="Number of waypoints treated today")
     target_waypoint_id: Optional[str] = Field(None, description="ObjectId string of the target waypoint, if dispatched")
@@ -20,7 +21,8 @@ class RobotStatusUpdate(BaseModel):
         "post_evaluating", 
         "adaptive_stabilization", 
         "completed", 
-        "failsafe_buoyancy"
+        "failsafe_buoyancy",
+        "manual_override"
     ] = Field("idle", description="The robot's current mission phase")
 
 class RobotStatusDispatch(BaseModel):

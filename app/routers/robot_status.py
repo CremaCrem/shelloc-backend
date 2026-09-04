@@ -74,7 +74,11 @@ async def update_robot_status(
     response_out = RobotStatusOut(**updated_doc)
     
     # Broadcast to any connected websocket clients
-    await manager.broadcast_to_robot(robot_id, response_out.model_dump(mode="json"))
+    payload = {
+        "event": "telemetry",
+        "data": response_out.model_dump(mode="json")
+    }
+    await manager.broadcast_to_robot(robot_id, payload)
     
     return response_out
 
@@ -150,6 +154,10 @@ async def dispatch_robot(robot_id: str, dispatch_update: RobotStatusDispatch):
     response_out = RobotStatusOut(**updated_doc)
     
     # Broadcast to any connected websocket clients
-    await manager.broadcast_to_robot(robot_id, response_out.model_dump(mode="json"))
+    payload = {
+        "event": "telemetry",
+        "data": response_out.model_dump(mode="json")
+    }
+    await manager.broadcast_to_robot(robot_id, payload)
     
     return response_out

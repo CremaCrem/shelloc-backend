@@ -78,6 +78,13 @@ In the Swagger UI, click the **Authorize** button and enter your `.env` `API_KEY
 ### Automated Tests
 Run tests locally via `pytest` or inside Docker with `docker compose exec backend pytest`.
 
+> [!IMPORTANT]
+> **Test Database Isolation**
+> 
+> The test suite uses an isolated test database (`shelloc_test`) rather than your primary `DB_NAME` specified in `.env`. This ensures tests can safely create and drop collections without affecting your real data.
+> 
+> This is enforced globally via a fixture in `tests/conftest.py` that intercepts the environment configuration and automatically wipes the `shelloc_test` database before each test session.
+
 ---
 
 ## 5. Running the Robot Simulator

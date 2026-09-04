@@ -30,12 +30,13 @@ def test_websocket_robot_status_broadcast():
         
         # Now read from the websocket to see if the broadcast arrived
         data = websocket.receive_json()
-        
+
         # Assert the broadcasted data matches what we expect
-        assert data["robot_id"] == robot_id
-        assert data["mission_state"] == "navigating"
-        assert data["battery_percent"] == 90
-        assert data["overall_status"] == "operational"
+        assert data.get("event") == "telemetry"
+        assert data["data"]["robot_id"] == robot_id
+        assert data["data"]["operation_mode"] == "autonomous"
+        assert data["data"]["battery_percent"] == 90
+        assert data["data"]["overall_status"] == "operational"
 
 def test_websocket_disconnect():
     """
