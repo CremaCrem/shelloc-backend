@@ -1,3 +1,4 @@
+from bson import ObjectId
 from fastapi import APIRouter, HTTPException, status
 from typing import List
 from datetime import datetime, timezone
@@ -46,12 +47,30 @@ async def list_waypoints(robot_id: str = None, limit: int = 50):
     waypoints = await cursor.to_list(length=200)
     
     return [WaypointOut(**serialize_doc(wp)) for wp in waypoints]
-@router.get("/robot/{robot_id}", response_model=List[WaypointOut])
+@router.get("/robot/{robot_id}", response_model=List[WaypointDetailOut])
 async def list_waypoints_by_robot(robot_id: str, limit: int = 50):
+    """Waypoints with their before/after readings inlined (the app's comparison view needs them)."""
     db = get_database()
-    cursor = db.waypoints.find({"robot_id": robot_id}).limit(min(limit, 200))
+    cursor = db.waypoints.find({"robot_id": robot_id}).sort("point_number", 1).limit(min(limit, 200))
     waypoints = await cursor.to_list(length=200)
-    return [WaypointOut(**serialize_doc(wp)) for wp in waypoints]
+
+    reading_ids = set()
+    for wp in waypoints:
+        for key in ("before_reading_id", "after_reading_id"):
+            if wp.get(key) and ObjectId.is_valid(wp[key]):
+                reading_ids.add(ObjectId(wp[key]))
+    readings = {}
+    if reading_ids:
+        async for r in db.sensor_readings.find({"_id": {"$in": list(reading_ids)}}):
+            readings[str(r["_id"])] = serialize_doc(r)
+
+    out = []
+    for wp in waypoints:
+        serialized_wp = serialize_doc(wp)
+        serialized_wp["before_reading"] = readings.get(wp.get("before_reading_id"))
+        serialized_wp["after_reading"] = readings.get(wp.get("after_reading_id"))
+        out.append(WaypointDetailOut(**serialized_wp))
+    return out
 
 @router.get("/{id}", response_model=WaypointDetailOut)
 async def get_waypoint(id: str):

@@ -8,7 +8,9 @@ from app.utils.bson import validate_object_id, serialize_doc
 
 router = APIRouter(prefix="/api/sensor-readings", tags=["Sensor Readings"])
 
-def compute_sensor_status(turbidity_ntu: float, ph: float) -> str:
+def compute_sensor_status(turbidity_ntu: Optional[float], ph: Optional[float]) -> str:
+    if turbidity_ntu is None or ph is None:
+        return "no_data"
     if turbidity_ntu < 20 and 6.0 <= ph <= 7.5:
         return "good"
     elif turbidity_ntu <= 50 and 5.5 <= ph <= 8.0:
@@ -23,11 +25,13 @@ async def create_sensor_reading(
 ):
     db = get_database()
     
-    # Validate waypoint exists
-    wp_oid = validate_object_id(reading.waypoint_id)
-    wp_doc = await db.waypoints.find_one({"_id": wp_oid})
-    if not wp_doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Waypoint not found")
+    # Validate waypoint exists (live readings between waypoints have none)
+    wp_oid = None
+    if reading.waypoint_id:
+        wp_oid = validate_object_id(reading.waypoint_id)
+        wp_doc = await db.waypoints.find_one({"_id": wp_oid})
+        if not wp_doc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Waypoint not found")
         
     doc = reading.model_dump()
     doc["timestamp"] = datetime.now(timezone.utc)
@@ -35,6 +39,18 @@ async def create_sensor_reading(
     
     result = await db.sensor_readings.insert_one(doc)
     doc["_id"] = result.inserted_id
+
+    # Link before/after readings to their waypoint so the app's comparison works
+    # even if the robot never PATCHes the waypoint itself. Latest reading wins
+    # (adaptive stabilization can take several "after" readings).
+    if wp_oid and reading.phase == "before":
+        await db.waypoints.update_one({"_id": wp_oid}, {"$set": {"before_reading_id": str(result.inserted_id)}})
+    elif wp_oid and reading.phase == "after":
+        await db.waypoints.update_one({"_id": wp_oid}, {"$set": {
+            "after_reading_id": str(result.inserted_id),
+            "treated": True,
+            "treated_at": doc["timestamp"],
+        }})
     
     return SensorReadingOut(**serialize_doc(doc))
 
