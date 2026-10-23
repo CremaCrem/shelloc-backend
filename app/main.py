@@ -1,4 +1,8 @@
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
@@ -15,6 +19,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logger = logging.getLogger("shelloc")
+
+
+@app.exception_handler(RequestValidationError)
+async def log_rejected_request(request: Request, exc: RequestValidationError):
+    # When the robot's data is rejected, the robot just looks "offline" in the app.
+    # Log why, so it shows up in the Render logs during testing.
+    logger.warning(f"Rejected {request.method} {request.url.path}: {exc.errors()}")
+    return await request_validation_exception_handler(request, exc)
+
 
 @app.get("/health", tags=["Health"])
 async def health_check():

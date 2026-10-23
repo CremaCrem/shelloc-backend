@@ -33,9 +33,10 @@ def test_robot_status_wrong_api_key():
 
 def test_robot_status_invalid_body():
     robot_id = f"robot_{uuid.uuid4().hex[:8]}"
-    # missing battery_percent
+    # Missing fields are allowed (partial heartbeats); unknown enum values are not
     response = client.post(f"/api/robot-status/{robot_id}", headers={"X-API-Key": VALID_API_KEY}, json={
-        "operation_mode": "autonomous"
+        "operation_mode": "turbo",
+        "mission_state": "dancing"
     })
     assert response.status_code == 422
 

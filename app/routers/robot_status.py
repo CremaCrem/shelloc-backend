@@ -10,14 +10,21 @@ from app.services.connection_manager import manager
 
 router = APIRouter(prefix="/api/robot-status", tags=["Robot Status"])
 
-def compute_overall_status(battery_percent: int, gps_signal: Optional[str]) -> str:
+def compute_overall_status(
+    battery_percent: Optional[float],
+    gps_signal: Optional[str],
+    buoyancy_failsafe_active: Optional[bool] = None,
+) -> str:
     """
-    Computes the overall_status of the robot based on battery and GPS.
+    Computes the overall_status of the robot based on battery, GPS and the buoyancy failsafe.
+    A value the robot never reported doesn't count as a problem.
     """
-    low_batt = battery_percent < 20
+    low_batt = battery_percent is not None and battery_percent < 20
     no_gps = gps_signal == "none"
     
-    if low_batt and no_gps:
+    if buoyancy_failsafe_active:
+        return "buoyancy_failsafe"
+    elif low_batt and no_gps:
         return "degraded"
     elif low_batt:
         return "low_battery"
@@ -38,17 +45,19 @@ async def update_robot_status(
     """
     db = get_database()
     
-    # Server-computed fields
-    last_sync = datetime.now(timezone.utc)
-    overall_status = compute_overall_status(
-        battery_percent=status_update.battery_percent,
-        gps_signal=status_update.gps_signal
-    )
-    
     # Prepare the document for MongoDB using exclude_unset to avoid overwriting fields like target_waypoint_id
     update_doc = status_update.model_dump(exclude_unset=True)
-    update_doc["last_sync"] = last_sync
-    update_doc["overall_status"] = overall_status
+
+    # Server-computed fields. The heartbeat may omit fields, so judge health on
+    # the stored values merged with this update.
+    existing = await db.robot_status.find_one({"robot_id": robot_id}) or {}
+    merged = {**existing, **update_doc}
+    update_doc["last_sync"] = datetime.now(timezone.utc)
+    update_doc["overall_status"] = compute_overall_status(
+        battery_percent=merged.get("battery_percent"),
+        gps_signal=merged.get("gps_signal"),
+        buoyancy_failsafe_active=merged.get("buoyancy_failsafe_active"),
+    )
     
     # We don't store robot_id as a separate field inside the document if we use it as _id, 
     # but for simplicity and indexing let's just store it as a field and query by it.
