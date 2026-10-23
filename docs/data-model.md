@@ -21,12 +21,13 @@ Stores water quality telemetry snapshots captured by the robot before and after 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `robot_id` | `str` | Yes | Unique identifier of the reporting robot |
-| `waypoint_id` | `str` | Yes | ObjectId string of the associated waypoint |
-| `phase` | `Literal["before", "after"]` | Yes | Reading taken prior to dosing or post-remediation |
-| `turbidity_ntu` | `float` | Yes | Water turbidity in Nephelometric Turbidity Units (NTU) |
-| `ph` | `float` | Yes | Acidity / alkalinity index (0.0 – 14.0 scale) |
-| `tds_ppm` | `float` | Yes | Total Dissolved Solids in parts per million (ppm) |
-| `temperature_celsius` | `float` | No | Water temperature in degrees Celsius (°C) |
+| `waypoint_id` | `str` | No | ObjectId string of the associated waypoint. Omit for a live reading taken between waypoints |
+| `phase` | `Literal["before", "after"]` | No | Reading taken prior to dosing or post-remediation. Omit for a live reading. A `before`/`after` reading is automatically linked to its waypoint (`after` also marks it treated) |
+| `turbidity_ntu` | `float` | No | Water turbidity in NTU. Alias accepted: `turbidity` |
+| `ph` | `float` | No | Acidity / alkalinity index (0.0 – 14.0 scale) |
+| `tds_ppm` | `float` | No | Total Dissolved Solids in ppm. Alias accepted: `tds` |
+| `temperature_celsius` | `float` | No | Water temperature in °C. Aliases accepted: `temperature`, `temperature_c` |
+| `latitude` / `longitude` | `float` | No | Where the reading was taken |
 | `nir_floc_score` | `float` | No | Near-Infrared optical floc aggregation index (0.0 – 1.0) |
 | `obstacle_detected` | `bool` | No | Boolean flag indicating SONAR underwater object proximity |
 | `sonar_distance_cm` | `float` | No | Distance to nearest underwater object in centimeters |
@@ -85,16 +86,19 @@ Single living document per robot upserted on every heartbeat (5-second interval)
 
 ### Request Schema (`RobotStatusUpdate`)
 
+Every field is optional: a heartbeat only updates the fields it sends, and the rest keep their last stored value. `overall_status` is judged on the stored values merged with the update.
+
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `operation_mode` | `Literal["autonomous", "manual"]` | Yes | Operational navigation mode |
+| `operation_mode` | `Literal["autonomous", "manual"]` | No | Operational navigation mode |
 | `gps_signal` | `Literal["good", "weak", "none"]` | No | GPS satellite lock quality |
-| `current_lat` | `float` | No | Current latitude coordinate |
-| `current_lng` | `float` | No | Current longitude coordinate |
-| `battery_percent` | `int` | Yes | Battery state of charge (0 – 100%) |
+| `current_lat` | `float` | No | Current latitude coordinate. Alias accepted: `gps_lat` |
+| `current_lng` | `float` | No | Current longitude coordinate. Alias accepted: `gps_lng` |
+| `heading_degrees` | `float` | No | Compass heading; any value is wrapped into 0 – 360 |
+| `battery_percent` | `float` | No | Battery state of charge, clamped to 0 – 100% |
 | `points_treated_today` | `int` | No | Number of targets remediated in current session |
 | `target_waypoint_id` | `str \| None` | No | ObjectId of the target waypoint the robot is dispatched to |
-| `mission_state` | `Literal[...]` | No | Current state in the 9-state closed-loop lifecycle (see below) |
+| `mission_state` | `Literal[...]` | No | Current state in the 9-state closed-loop lifecycle (see below). Alias accepted: `status` |
 | `flocculant_tank_percent` | `int` | No | Moringa-Chitosan reagent reservoir level (0 – 100%) |
 | `citric_acid_tank_percent` | `int` | No | Citric Acid reagent reservoir level (0 – 100%) |
 | `biochar_health_status` | `Literal["optimal", "degraded", "replace"]` | No | Health / absorption capacity of biochar filter |
