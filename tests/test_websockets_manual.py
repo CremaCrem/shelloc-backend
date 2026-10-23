@@ -113,8 +113,12 @@ def test_resume_autonomous_with_active_waypoint(client):
         with client.websocket_connect(f"/ws/robot/{robot_id}?role=mobile") as mobile_ws:
             mobile_ws.send_json({"event": "resume_autonomous"})
             
-            # Edge should receive the resume_navigation command with the waypoint_id
-            # Wait for this FIRST to synchronize with the server processing
+            # Edge receives resume_autonomous (firmware doc name) then resume_navigation
+            # (older contract), both carrying the waypoint_id.
+            # Wait for these FIRST to synchronize with the server processing
+            data = receive_with_timeout(edge_ws, timeout=5.0)
+            assert data.get("event") == "resume_autonomous"
+            assert data.get("waypoint_id") == real_wp_id
             data = receive_with_timeout(edge_ws, timeout=5.0)
             assert data.get("event") == "resume_navigation"
             assert data.get("waypoint_id") == real_wp_id
@@ -141,10 +145,12 @@ def test_resume_autonomous_without_active_waypoint(client):
         with client.websocket_connect(f"/ws/robot/{robot_id}?role=mobile") as mobile_ws:
             mobile_ws.send_json({"event": "resume_autonomous"})
             
-            # Edge should NOT receive a resume_navigation command since there is no active waypoint
+            # Edge is told to leave manual mode, with no waypoint to resume
             # We do this FIRST so it actually executes before the state assertion can short-circuit
-            data = receive_with_timeout(edge_ws, timeout=1.0)
-            assert data is None, "Edge should not receive resume_navigation command when no waypoint exists"
+            data = receive_with_timeout(edge_ws, timeout=5.0)
+            assert data == {"event": "resume_autonomous", "waypoint_id": None}
+            # ...and no resume_navigation, since there is nothing to navigate to
+            assert receive_with_timeout(edge_ws, timeout=1.0) is None
             
             response = client.get(f"/api/robot-status/{robot_id}")
             assert response.json()["mission_state"] == "idle"
@@ -186,9 +192,10 @@ def test_resume_autonomous_wrong_state_ignored(client):
         with client.websocket_connect(f"/ws/robot/{robot_id}?role=mobile") as mobile_ws:
             mobile_ws.send_json({"event": "resume_autonomous"})
             
-            # Edge should NOT receive a resume_navigation command because state isn't manual_override
-            data = receive_with_timeout(edge_ws, timeout=1.0)
-            assert data is None, "Edge should not receive resume_navigation command when not in manual_override"
+            # The robot may have overwritten manual_override with its own state while being
+            # driven; it must still be told to leave manual mode.
+            data = receive_with_timeout(edge_ws, timeout=5.0)
+            assert data.get("event") == "resume_autonomous"
             
             response = client.get(f"/api/robot-status/{robot_id}")
             assert response.json()["mission_state"] == "navigating"
@@ -219,3 +226,27 @@ def test_telemetry_broadcast_includes_heading_degrees(client):
         assert data.get("event") == "telemetry"
         assert data.get("data", {}).get("heading_degrees") == 275.5
 
+
+
+def test_manual_control_marks_manual_override(client):
+    """First joystick packet records manual mode, even if the robot never reports it."""
+    robot_id = "test-ws-manual-08"
+    headers = {"X-API-Key": settings.API_KEY}
+    client.post(f"/api/robot-status/{robot_id}", json={
+        "operation_mode": "autonomous", "battery_percent": 90, "mission_state": "idle"
+    }, headers=headers)
+
+    with client.websocket_connect(f"/ws/robot/{robot_id}?role=edge") as edge_ws:
+        with client.websocket_connect(f"/ws/robot/{robot_id}?role=mobile") as mobile_ws:
+            mobile_ws.send_json({"event": "manual_control", "data": {"x": 0.0, "y": 0.5}})
+            assert receive_with_timeout(edge_ws, timeout=5.0)["event"] == "manual_control"
+
+            status_doc = client.get(f"/api/robot-status/{robot_id}").json()
+            assert status_doc["mission_state"] == "manual_override"
+            assert status_doc["operation_mode"] == "manual"
+
+            mobile_ws.send_json({"event": "resume_autonomous"})
+            assert receive_with_timeout(edge_ws, timeout=5.0)["event"] == "resume_autonomous"
+            status_doc = client.get(f"/api/robot-status/{robot_id}").json()
+            assert status_doc["mission_state"] == "idle"
+            assert status_doc["operation_mode"] == "autonomous"

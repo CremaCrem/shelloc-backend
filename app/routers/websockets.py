@@ -19,6 +19,12 @@ def _validate_joystick(data: dict) -> bool:
     return -1.0 <= x <= 1.0 and -1.0 <= y <= 1.0
 
 
+# Robots currently being driven from the app. Lets us mark manual_override once
+# instead of writing to the DB on every joystick packet (5-10 per second).
+# ponytail: in-memory, assumes a single server process (same as the connection manager).
+_manual_robots = set()
+
+
 async def _handle_manual_control(websocket: WebSocket, robot_id: str, payload: dict):
     """Validate joystick data and relay to edge connections only."""
     data = payload.get("data")
@@ -27,38 +33,52 @@ async def _handle_manual_control(websocket: WebSocket, robot_id: str, payload: d
         return  # silently drop invalid payloads
     await manager.send_to_role(robot_id, "edge", payload, exclude=websocket)
 
+    # Record the takeover ourselves so the app shows MANUAL and resume works,
+    # even if the robot firmware never reports manual_override.
+    if robot_id not in _manual_robots:
+        _manual_robots.add(robot_id)
+        await get_database().robot_status.update_one(
+            {"robot_id": robot_id},
+            {"$set": {"mission_state": "manual_override", "operation_mode": "manual"}},
+        )
+
 
 async def _handle_resume_autonomous(robot_id: str):
-    """Transition back to autonomous mode. If a waypoint is active, resume navigation."""
-    logger.debug(f"resume_autonomous called for {robot_id}")
-    db = get_database()
-    doc = await db.robot_status.find_one({"robot_id": robot_id})
-    if not doc:
-        return
+    """Tell the robot to leave manual mode. If a waypoint is active, resume navigation.
 
-    # Guard: only act if currently in manual_override
-    if doc.get("mission_state") != "manual_override":
-        logger.info(f"Ignoring resume_autonomous for {robot_id}: not in manual_override state")
-        return
+    The command is always forwarded to the robot — a robot that is still being driven
+    must hear "stop manual", whatever the stored state says.
+    """
+    logger.debug(f"resume_autonomous called for {robot_id}")
+    _manual_robots.discard(robot_id)
+    db = get_database()
+    doc = await db.robot_status.find_one({"robot_id": robot_id}) or {}
 
     target_wp = doc.get("target_waypoint_id")
+    target_wp = str(target_wp) if target_wp else None
+
+    # Firmware doc names this event "resume_autonomous"; older backend contract
+    # used "resume_navigation". Send both so either firmware version reacts.
+    await manager.send_to_role(robot_id, "edge", {
+        "event": "resume_autonomous",
+        "waypoint_id": target_wp,
+    })
     if target_wp:
-        # Active waypoint exists — set state to navigating and tell edge to resume
-        await db.robot_status.update_one(
-            {"robot_id": robot_id},
-            {"$set": {"mission_state": "navigating"}}
-        )
         await manager.send_to_role(robot_id, "edge", {
             "event": "resume_navigation",
-            "waypoint_id": str(target_wp),
+            "waypoint_id": target_wp,
         })
-    else:
-        # No active waypoint — just return to idle
+
+    # Only move the stored state if it still says manual; otherwise the robot's own
+    # heartbeat already reported something newer and is the source of truth.
+    if doc.get("mission_state") == "manual_override":
         await db.robot_status.update_one(
             {"robot_id": robot_id},
-            {"$set": {"mission_state": "idle"}}
+            {"$set": {
+                "mission_state": "navigating" if target_wp else "idle",
+                "operation_mode": "autonomous",
+            }}
         )
-        logger.debug(f"State set to idle for robot {robot_id}.")
 
 
 @router.websocket("/ws/robot/{robot_id}")
@@ -102,3 +122,6 @@ async def websocket_endpoint(
                 logger.debug(f"Unknown event '{event}' from {role} on robot {robot_id}")
     except WebSocketDisconnect:
         manager.disconnect(websocket, robot_id)
+        if role == "mobile":
+            # Next joystick session marks manual_override again.
+            _manual_robots.discard(robot_id)
